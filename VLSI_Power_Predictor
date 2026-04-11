@@ -1,0 +1,1061 @@
+# ============================================================
+# VLSI POWER DISSIPATION PREDICTOR
+# VS Code version — run with: python vlsi_power_predictor.py
+#
+# Requirements:
+#   pip install numpy pandas scikit-learn matplotlib scipy
+#
+# Files needed in same folder as this script:
+#   power_dataset.csv   — training dataset (exported from Colab)
+#   IR_drop/            — folder containing extracted .npy IR drop files
+# ============================================================
+
+import os
+import sys
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+from scipy.ndimage import gaussian_filter
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+
+# ============================================================
+# MODULE LAYOUT DEFINITIONS
+# Named RTL modules with approximate spatial positions (% of chip)
+# Based on typical RISC-V floorplan proportions
+# ============================================================
+
+MODULE_LAYOUT = {
+    'RISCY': [
+        {'name': 'ALU',             'r0': 0.00, 'r1': 0.30, 'c0': 0.00, 'c1': 0.40},
+        {'name': 'Register_File',   'r0': 0.00, 'r1': 0.30, 'c0': 0.40, 'c1': 0.75},
+        {'name': 'Decoder',         'r0': 0.00, 'r1': 0.30, 'c0': 0.75, 'c1': 1.00},
+        {'name': 'Load_Store_Unit', 'r0': 0.30, 'r1': 0.60, 'c0': 0.00, 'c1': 0.40},
+        {'name': 'Control_Unit',    'r0': 0.30, 'r1': 0.60, 'c0': 0.40, 'c1': 0.70},
+        {'name': 'CSR_Unit',        'r0': 0.30, 'r1': 0.60, 'c0': 0.70, 'c1': 1.00},
+        {'name': 'Mult_Div',        'r0': 0.60, 'r1': 1.00, 'c0': 0.00, 'c1': 0.50},
+        {'name': 'Pipeline_Regs',   'r0': 0.60, 'r1': 1.00, 'c0': 0.50, 'c1': 1.00},
+    ],
+    'RISCY-FPU': [
+        {'name': 'ALU',              'r0': 0.00, 'r1': 0.25, 'c0': 0.00, 'c1': 0.35},
+        {'name': 'FPU',              'r0': 0.00, 'r1': 0.40, 'c0': 0.35, 'c1': 0.75},
+        {'name': 'Register_File',    'r0': 0.00, 'r1': 0.25, 'c0': 0.75, 'c1': 1.00},
+        {'name': 'Decoder',          'r0': 0.25, 'r1': 0.50, 'c0': 0.00, 'c1': 0.35},
+        {'name': 'Load_Store_Unit',  'r0': 0.40, 'r1': 0.65, 'c0': 0.35, 'c1': 0.70},
+        {'name': 'Control_Unit',     'r0': 0.25, 'r1': 0.55, 'c0': 0.70, 'c1': 1.00},
+        {'name': 'CSR_Unit',         'r0': 0.55, 'r1': 0.80, 'c0': 0.70, 'c1': 1.00},
+        {'name': 'Mult_Div',         'r0': 0.50, 'r1': 0.80, 'c0': 0.00, 'c1': 0.35},
+        {'name': 'Pipeline_Regs',    'r0': 0.80, 'r1': 1.00, 'c0': 0.00, 'c1': 1.00},
+        {'name': 'FP_Register_File', 'r0': 0.65, 'r1': 0.80, 'c0': 0.35, 'c1': 0.70},
+    ],
+    'zero-riscy': [
+        {'name': 'ALU',             'r0': 0.00, 'r1': 0.35, 'c0': 0.00, 'c1': 0.45},
+        {'name': 'Register_File',   'r0': 0.00, 'r1': 0.35, 'c0': 0.45, 'c1': 0.80},
+        {'name': 'Decoder',         'r0': 0.00, 'r1': 0.35, 'c0': 0.80, 'c1': 1.00},
+        {'name': 'Load_Store_Unit', 'r0': 0.35, 'r1': 0.65, 'c0': 0.00, 'c1': 0.45},
+        {'name': 'Control_Unit',    'r0': 0.35, 'r1': 0.65, 'c0': 0.45, 'c1': 1.00},
+        {'name': 'CSR_Unit',        'r0': 0.65, 'r1': 1.00, 'c0': 0.00, 'c1': 0.50},
+        {'name': 'Pipeline_Regs',   'r0': 0.65, 'r1': 1.00, 'c0': 0.50, 'c1': 1.00},
+    ]
+}
+
+
+# ============================================================
+# MODULE KNOWLEDGE BASE
+# Per-module power sources and targeted recommendations
+# ============================================================
+
+MODULE_KNOWLEDGE = {
+    'ALU': {
+        'primary_power_source': 'combinational switching',
+        'recs': {
+            'high': [
+                "Apply operand isolation — gate ALU inputs when result is unused",
+                "Use carry-save adder structures to reduce glitch power",
+                "Consider multi-Vt cells for non-critical ALU paths",
+            ],
+            'moderate': [
+                "Review ALU enable signals — ensure idle during memory-only operations",
+                "Check for unnecessary toggling on unused ALU opcodes",
+            ]
+        }
+    },
+    'FPU': {
+        'primary_power_source': 'large combinational logic + high toggle rate',
+        'recs': {
+            'high': [
+                "Gate FPU clock entirely when no FP instructions are in-flight",
+                "Use denormal flush-to-zero mode to avoid costly subnormal handling",
+                "Pipeline FPU operations to allow lower Vdd on FP logic",
+                "Apply input isolation registers to prevent spurious toggling",
+            ],
+            'moderate': [
+                "Ensure FPU is clock-gated during integer-only workloads",
+                "Profile FP instruction mix — reduce precision if application allows",
+            ]
+        }
+    },
+    'Register_File': {
+        'primary_power_source': 'frequent read/write port switching',
+        'recs': {
+            'high': [
+                "Reduce register file port count if IPC analysis allows",
+                "Use bank-wise clock gating on register file arrays",
+                "Consider latch-based register file for lower dynamic power",
+            ],
+            'moderate': [
+                "Check for unnecessary write-back operations from stalled instructions",
+                "Use write-enable gating to suppress spurious writes",
+            ]
+        }
+    },
+    'FP_Register_File': {
+        'primary_power_source': 'wide data paths (64-bit) switching',
+        'recs': {
+            'high': [
+                "Apply aggressive clock gating on FP register file banks",
+                "Reduce FP register file size if workload uses fewer FP registers",
+            ],
+            'moderate': [
+                "Ensure FP register file is powered down during integer-only phases",
+            ]
+        }
+    },
+    'Decoder': {
+        'primary_power_source': 'instruction fetch switching activity',
+        'recs': {
+            'high': [
+                "Reduce unnecessary instruction fetch by improving branch prediction",
+                "Apply clock gating on decoder when pipeline is stalled",
+                "Use pre-decode logic to suppress full decode on NOPs/bubbles",
+            ],
+            'moderate': [
+                "Check pipeline stall frequency — stalls cause decoder to toggle without useful work",
+            ]
+        }
+    },
+    'Load_Store_Unit': {
+        'primary_power_source': 'memory address computation + data bus switching',
+        'recs': {
+            'high': [
+                "Apply data bus inversion (DBI) encoding on memory data paths",
+                "Gate LSU clock during instruction-only execution phases",
+                "Use write buffers to coalesce memory transactions and reduce bus toggles",
+            ],
+            'moderate': [
+                "Review memory access patterns — unnecessary loads/stores increase switching",
+                "Consider prefetch buffer to reduce repeated address computation",
+            ]
+        }
+    },
+    'Control_Unit': {
+        'primary_power_source': 'state machine transitions',
+        'recs': {
+            'high': [
+                "Use one-hot encoding for FSM states to reduce glitch power",
+                "Apply clock gating on control signals during stall cycles",
+                "Review exception/interrupt handling logic for unnecessary switching",
+            ],
+            'moderate': [
+                "Check for redundant control signal toggles during pipeline flushes",
+            ]
+        }
+    },
+    'CSR_Unit': {
+        'primary_power_source': 'infrequent but wide register access',
+        'recs': {
+            'high': [
+                "Gate CSR access logic — CSR reads/writes are rare and should be fully clock-gated",
+                "Use retiming to move CSR logic to a lower-frequency domain",
+            ],
+            'moderate': [
+                "Ensure CSR unit is idle-gated during normal execution (non-privileged instructions)",
+            ]
+        }
+    },
+    'Mult_Div': {
+        'primary_power_source': 'iterative logic with high switching depth',
+        'recs': {
+            'high': [
+                "Use early termination in divider — stop iterations when quotient is determined",
+                "Apply Booth encoding on multiplier to reduce partial product count",
+                "Gate multiplier/divider clock when no MUL/DIV instruction is executing",
+                "Consider shared multiply-accumulate unit to reduce redundant hardware",
+            ],
+            'moderate': [
+                "Ensure MUL/DIV unit is fully clock-gated between operations",
+                "Check if 32-bit multiply can replace 64-bit for current workload",
+            ]
+        }
+    },
+    'Pipeline_Regs': {
+        'primary_power_source': 'pipeline register switching every cycle',
+        'recs': {
+            'high': [
+                "Use clock gating on pipeline registers during stall cycles (hold enable low)",
+                "Apply bubble squashing — insert NOPs rather than propagating garbage data",
+                "Use latch-based pipeline registers for ~30% power reduction vs flip-flops",
+            ],
+            'moderate': [
+                "Check stall/flush logic — unnecessary pipeline flushes increase register toggling",
+            ]
+        }
+    },
+}
+
+
+# ============================================================
+# HELPER: ROBUST FILENAME PARSER
+# Handles RISCY, RISCY-FPU, zero-riscy naming patterns
+# ============================================================
+
+def parse_filename(filename):
+    parts     = filename.replace('.npy', '').split('-')
+    clock_idx = None
+    for i, p in enumerate(parts):
+        if p.startswith('c') and p[1:].isdigit():
+            clock_idx = i
+            break
+    if clock_idx is None:
+        raise ValueError(f"Could not parse filename: {filename}")
+
+    return {
+        'design_id':   parts[0],
+        'design_name': '-'.join(parts[1:clock_idx - 1]),
+        'variant':     parts[clock_idx - 1],
+        'clock_ns':    int(parts[clock_idx].replace('c', '')),
+        'utilization': float(parts[clock_idx + 1].replace('u', '')),
+        'macro_place': int(parts[clock_idx + 2].replace('m', '')),
+        'power_mesh':  int(parts[clock_idx + 3].replace('p', '')),
+        'filler':      int(parts[clock_idx + 4].replace('f', '')),
+    }
+
+
+# ============================================================
+# HELPER: EXTRACT NAMED MODULE POWER FROM IR DROP MAP
+# ============================================================
+
+def extract_module_power(ir_map, design_name):
+    rows, cols = ir_map.shape
+    layout     = MODULE_LAYOUT.get(design_name, MODULE_LAYOUT['RISCY'])
+    stats      = {}
+
+    for m in layout:
+        r0 = int(m['r0'] * rows);  r1 = int(m['r1'] * rows)
+        c0 = int(m['c0'] * cols);  c1 = int(m['c1'] * cols)
+        region = ir_map[r0:r1, c0:c1]
+        stats[m['name']] = {
+            'mean_ir':     float(region.mean()),
+            'max_ir':      float(region.max()),
+            'std_ir':      float(region.std()),
+            'hotspot_pct': float((region > region.mean() + 2 * region.std()).mean()),
+            'bounds':      (r0, r1, c0, c1)
+        }
+
+    return stats
+
+
+# ============================================================
+# HELPER: PARAMETER MAPPING
+# Maps real engineering inputs to dataset feature space
+# ============================================================
+
+def map_params(clock_mhz, util_pct, num_macros, pdn_layers,
+               gate_count, placement, filler_stage):
+    clock_ns    = min([2, 5, 20], key=lambda x: abs(x - round(1000 / clock_mhz)))
+    utilization = round(min([0.70, 0.75, 0.80, 0.85, 0.90],
+                            key=lambda x: abs(x - util_pct / 100)), 2)
+    macros      = min(3, max(1, round(num_macros / 5) + 1))
+    power_mesh  = min(8, max(1, round(pdn_layers * 0.8)))
+    variant     = 'a' if gate_count <= 100 else 'b'
+    macro_place = {'edge': 1, 'center': 2, 'distributed': 3}.get(
+                    str(placement).strip().lower(), 1)
+    filler      = 1 if str(filler_stage).strip().lower() == 'routing' else 0
+
+    return {
+        'design_name': 'RISCY',
+        'variant':      variant,
+        'macros':       macros,
+        'clock_ns':     clock_ns,
+        'utilization':  utilization,
+        'macro_place':  macro_place,
+        'power_mesh':   power_mesh,
+        'filler':       filler,
+    }
+
+
+# ============================================================
+# HELPER: MODULE-LEVEL RECOMMENDATIONS
+# ============================================================
+
+def get_module_recommendations(module_name, mean_ir,
+                                threshold_high, threshold_moderate):
+    knowledge = MODULE_KNOWLEDGE.get(module_name, None)
+
+    if mean_ir >= threshold_high:
+        severity = 'HIGH'
+        recs = (knowledge['recs']['high'] if knowledge
+                else ["Apply clock gating on this module",
+                      "Reduce switching activity — profile toggle rates"])
+    elif mean_ir >= threshold_moderate:
+        severity = 'MODERATE'
+        recs = (knowledge['recs']['moderate'] if knowledge
+                else ["Monitor this module — consider clock gating if power increases"])
+    else:
+        severity = 'LOW'
+        recs = ["Module is operating within acceptable power range. No action needed."]
+
+    source = knowledge['primary_power_source'] if knowledge else "switching activity"
+    return severity, source, recs
+
+
+# ============================================================
+# HELPER: BUILD IR DROP MAP FOR VS CODE
+# ============================================================
+
+def build_ir_map(design_params, pred, ir_drop_path, df):
+    MAP_SIZE = 128
+
+    if os.path.exists(ir_drop_path):
+        files = [f for f in os.listdir(ir_drop_path)
+                 if f.endswith('.npy') or '.' not in f]
+
+        if files:
+            df['distance'] = (
+                (df['clock_ns']    - design_params['clock_ns']).abs() * 10
+                + (df['utilization'] - design_params['utilization']).abs() * 5
+                + (df['power_mesh']  - design_params['power_mesh']).abs()
+            )
+            closest      = df.nsmallest(1, 'distance').iloc[0]
+            sample_index = int(closest.name) % len(files)
+            sample_file  = files[sample_index]
+            raw          = np.load(os.path.join(ir_drop_path, sample_file))
+
+            if raw.ndim == 2 and min(raw.shape) >= 32:
+                print(f"  Using real IR drop map: {sample_file}  shape={raw.shape}")
+                ir_map = raw.astype(float)
+                r_min, r_max = ir_map.min(), ir_map.max()
+                if r_max - r_min > 1e-9:
+                    ir_map = (ir_map - r_min) / (r_max - r_min)
+                return ir_map, sample_file
+
+            flat = raw.flatten().astype(float)
+            print(f"  Seeding heatmap from feature vector: {sample_file}")
+        else:
+            flat = np.random.rand(64)
+            sample_file = "synthetic"
+            print("  IR_drop/ folder is empty — using synthetic heatmap")
+    else:
+        flat = np.random.rand(64)
+        sample_file = "synthetic"
+        print("  IR_drop/ folder not found — using synthetic heatmap")
+
+    np.random.seed(int(abs(flat.sum() * 1000)) % (2 ** 31))
+    base      = np.random.rand(MAP_SIZE, MAP_SIZE)
+    n_feat    = len(flat)
+    norm_feat = (flat - flat.min()) / (flat.max() - flat.min() + 1e-9)
+
+    for idx, val in enumerate(norm_feat):
+        row = int((idx / n_feat) * MAP_SIZE)
+        col = int(((idx * 7) % n_feat / n_feat) * MAP_SIZE)
+        r0  = max(0, row - 8);  r1 = min(MAP_SIZE, row + 8)
+        c0  = max(0, col - 8);  c1 = min(MAP_SIZE, col + 8)
+        base[r0:r1, c0:c1] += val * 1.5
+
+    base   = base * (0.5 + pred * 3.0)
+    ir_map = gaussian_filter(base, sigma=6)
+    d_min, d_max = ir_map.min(), ir_map.max()
+    if d_max - d_min > 1e-9:
+        ir_map = (ir_map - d_min) / (d_max - d_min)
+    else:
+        ir_map = np.zeros_like(ir_map)
+
+    return ir_map, sample_file
+
+
+# ============================================================
+# HELPER: PLOT MODULE HEATMAP (named RTL modules)
+# ============================================================
+
+def plot_module_heatmap(ir_map, design_name, sample_name, save_path='module_heatmap.png'):
+    layout       = MODULE_LAYOUT.get(design_name, MODULE_LAYOUT['RISCY'])
+    rows, cols   = ir_map.shape
+    module_stats = extract_module_power(ir_map, design_name)
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    tab_colors = plt.cm.tab10.colors
+
+    # ── Left: IR drop map with named module boundaries ───────────
+    ax = axes[0]
+    im = ax.imshow(ir_map, cmap='hot', interpolation='nearest', vmin=0, vmax=1)
+    plt.colorbar(im, ax=ax, label='IR Drop (proxy for power)')
+
+    for i, m in enumerate(layout):
+        r0 = int(m['r0'] * rows);  r1 = int(m['r1'] * rows)
+        c0 = int(m['c0'] * cols);  c1 = int(m['c1'] * cols)
+        mean_val = module_stats[m['name']]['mean_ir']
+
+        rect = mpatches.Rectangle(
+            (c0, r0), c1 - c0, r1 - r0,
+            linewidth=2, edgecolor=tab_colors[i % 10],
+            facecolor='none', linestyle='--'
+        )
+        ax.add_patch(rect)
+        ax.text(
+            (c0 + c1) / 2, (r0 + r1) / 2,
+            f"{m['name']}\n{mean_val:.3f}",
+            ha='center', va='center', fontsize=7,
+            color='white', fontweight='bold',
+            bbox=dict(boxstyle='round,pad=0.2',
+                      facecolor=tab_colors[i % 10], alpha=0.6)
+        )
+
+    ax.set_title(f'IR Drop Map with Module Boundaries\n{sample_name}', fontsize=10)
+    ax.set_xlabel('Column tiles')
+    ax.set_ylabel('Row tiles')
+
+    # ── Right: Ranked bar chart ───────────────────────────────────
+    ax2          = axes[1]
+    sorted_mods  = sorted(module_stats.items(), key=lambda x: -x[1]['mean_ir'])
+    mod_names    = [m[0] for m in sorted_mods]
+    mod_vals     = [m[1]['mean_ir'] for m in sorted_mods]
+    threshold    = np.percentile(mod_vals, 60)
+    bar_colors   = ['#d62728' if v >= threshold else '#1f77b4' for v in mod_vals]
+
+    bars = ax2.barh(mod_names[::-1], mod_vals[::-1], color=bar_colors[::-1])
+    ax2.axvline(threshold, color='orange', linestyle='--',
+                linewidth=1.5, label='Hotspot threshold')
+    ax2.set_xlabel('Mean IR Drop (Power Proxy)')
+    ax2.set_title('Module Power Ranking\n(Red = Power-Hungry)', fontsize=10)
+    ax2.legend(fontsize=8)
+
+    for bar, val in zip(bars, mod_vals[::-1]):
+        ax2.text(bar.get_width() + 0.002,
+                 bar.get_y() + bar.get_height() / 2,
+                 f'{val:.4f}', va='center', fontsize=8)
+
+    plt.suptitle(f'Module-Level Power Analysis — {design_name}',
+                 fontsize=12, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=120)
+    plt.show()
+    print(f"  Saved: {save_path}")
+
+
+# ============================================================
+# HELPER: FULL MODULE REPORT (named RTL modules)
+# ============================================================
+
+def full_module_report(ir_map, design_name, design_params=None):
+    module_stats = extract_module_power(ir_map, design_name)
+    all_means    = [s['mean_ir'] for s in module_stats.values()]
+
+    threshold_high     = np.percentile(all_means, 70)
+    threshold_moderate = np.percentile(all_means, 40)
+
+    sorted_modules = sorted(module_stats.items(), key=lambda x: -x[1]['mean_ir'])
+
+    print('\n' + '=' * 65)
+    print('       MODULE-LEVEL POWER DISSIPATION REPORT')
+    print('=' * 65)
+    if design_params:
+        clock = design_params.get('clock_ns', 'N/A')
+        util  = design_params.get('utilization', 0)
+        print(f"  Design     : {design_name}")
+        print(f"  Clock      : {clock} ns  ({1000 // clock} MHz)")
+        print(f"  Utilization: {util * 100:.0f}%")
+    print(f"  Modules analyzed  : {len(module_stats)}")
+    print(f"  Hotspot threshold : mean_IR > {threshold_high:.4f}")
+    print('=' * 65)
+
+    for rank, (mod_name, stats) in enumerate(sorted_modules, 1):
+        severity, source, recs = get_module_recommendations(
+            mod_name, stats['mean_ir'], threshold_high, threshold_moderate
+        )
+        emoji = {'HIGH': '🔴', 'MODERATE': '🟡', 'LOW': '🟢'}.get(severity, '')
+        print(f"\n  [{rank}] {mod_name}  {emoji} {severity}")
+        print(f"       Mean IR Drop  : {stats['mean_ir']:.4f}")
+        print(f"       Max IR Drop   : {stats['max_ir']:.4f}")
+        print(f"       Hotspot tiles : {stats['hotspot_pct'] * 100:.1f}%")
+        print(f"       Power source  : {source}")
+        print(f"       Recommendations:")
+        for i, r in enumerate(recs, 1):
+            print(f"         {i}. {r}")
+
+    high_mods = [m for m, s in sorted_modules
+                 if s['mean_ir'] >= threshold_high]
+    print('\n' + '=' * 65)
+    print(f"  SUMMARY: {len(high_mods)} power-hungry module(s) identified:")
+    for m in high_mods:
+        print(f"    🔴 {m}")
+    print('=' * 65)
+
+    return module_stats
+
+
+# ============================================================
+# INPUT HELPERS
+# ============================================================
+
+def get_float(prompt, min_val, max_val, unit='', example=''):
+    while True:
+        print(f"\n  Range   : {min_val} to {max_val} {unit}")
+        if example:
+            print(f"  Example : {example}")
+        try:
+            val = float(input(f"  {prompt}: ").strip())
+            if min_val <= val <= max_val:
+                return val
+            print(f"  Must be between {min_val} and {max_val} {unit}")
+        except (ValueError, EOFError):
+            print("  Invalid. Enter a number.")
+
+
+def get_int(prompt, min_val, max_val, unit='', example=''):
+    while True:
+        print(f"\n  Range   : {min_val} to {max_val} {unit}")
+        if example:
+            print(f"  Example : {example}")
+        try:
+            val = int(input(f"  {prompt}: ").strip())
+            if min_val <= val <= max_val:
+                return val
+            print(f"  Must be between {min_val} and {max_val}")
+        except (ValueError, EOFError):
+            print("  Invalid. Enter a whole number.")
+
+
+def get_choice(prompt, options, example=''):
+    while True:
+        print(f"\n  Options : {' | '.join(options)}")
+        if example:
+            print(f"  Example : {example}")
+        val = input(f"  {prompt}: ").strip().lower()
+        if val in options:
+            return val
+        print(f"  Must be one of: {options}")
+
+
+# ============================================================
+# STEP 1 — LOAD DATASET & TRAIN MODEL
+# ============================================================
+
+print('\n' + '=' * 60)
+print('  VLSI POWER DISSIPATION PREDICTOR')
+print('  Loading dataset and training model...')
+print('=' * 60)
+
+csv_path = 'power_dataset.csv'
+if not os.path.exists(csv_path):
+    print(f"\n  ERROR: '{csv_path}' not found.")
+    print("  Export power_dataset.csv from Colab to the same folder as this script.")
+    sys.exit(1)
+
+df = pd.read_csv(csv_path)
+print(f"  Dataset loaded   : {df.shape}")
+
+le_design  = LabelEncoder()
+le_variant = LabelEncoder()
+df['design_encoded']  = le_design.fit_transform(df['design_name'])
+df['variant_encoded'] = le_variant.fit_transform(df['variant'])
+
+feature_cols = ['design_encoded', 'variant_encoded', 'macros', 'clock_ns',
+                'utilization', 'macro_place', 'power_mesh', 'filler']
+
+rf = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+rf.fit(df[feature_cols], df['mean_ir_drop'])
+print("  Model trained!")
+
+
+# ============================================================
+# STEP 2 — INPUT MODE SELECTION
+# ============================================================
+
+print('\n' + '=' * 60)
+print('  1 → Manual input')
+print('  2 → CSV input')
+print('=' * 60)
+
+choice = input('\n  Enter 1 or 2: ').strip()
+while choice not in ['1', '2']:
+    print("  Invalid. Enter 1 or 2.")
+    choice = input('  Enter 1 or 2: ').strip()
+
+
+# ============================================================
+# OPTION 1 — MANUAL INPUT
+# ============================================================
+
+if choice == '1':
+    print('\n' + '=' * 60)
+    print('  MANUAL INPUT MODE')
+    print('=' * 60)
+
+    print("\n  1. CLOCK FREQUENCY")
+    clock_mhz    = get_float("Enter clock frequency (MHz)", 1, 1000, "MHz", "500")
+
+    print("\n  2. CHIP UTILIZATION")
+    util_pct     = get_float("Enter utilization percentage", 50, 95, "%", "85")
+
+    print("\n  3. NUMBER OF HARD MACROS")
+    num_macros   = get_int("Enter number of hard macros", 0, 20, "macros", "4")
+
+    print("\n  4. PDN METAL LAYERS")
+    pdn_layers   = get_int("Enter number of PDN metal layers", 1, 10, "layers", "4")
+
+    print("\n  5. GATE COUNT")
+    gate_count   = get_int("Enter gate count (in thousands)", 1, 500, "K gates", "50")
+
+    print("\n  6. MACRO PLACEMENT STRATEGY")
+    placement    = get_choice("Enter placement strategy",
+                              ['edge', 'center', 'distributed'], "edge")
+
+    print("\n  7. FILLER INSERTION STAGE")
+    filler_stage = get_choice("Enter filler stage",
+                              ['placement', 'routing'], "routing")
+
+    design_params = map_params(clock_mhz, util_pct, num_macros,
+                               pdn_layers, gate_count, placement, filler_stage)
+    all_params    = [design_params]
+
+    print('\n' + '=' * 60)
+    print("  Input captured!")
+    print('=' * 60)
+    print(f"  {'Parameter':<25} {'Your Input':<15} {'Mapped'}")
+    print(f"  {'-'*55}")
+    print(f"  {'Clock Frequency':<25} {str(clock_mhz)+' MHz':<15} {design_params['clock_ns']}ns period")
+    print(f"  {'Utilization':<25} {str(util_pct)+'%':<15} {design_params['utilization']*100:.0f}%")
+    print(f"  {'Hard Macros':<25} {str(num_macros):<15} Category {design_params['macros']}")
+    print(f"  {'PDN Layers':<25} {str(pdn_layers):<15} Mesh {design_params['power_mesh']}/8")
+    print(f"  {'Gate Count':<25} {str(gate_count)+'K':<15} Variant '{design_params['variant']}'")
+    print(f"  {'Placement Strategy':<25} {placement:<15} Config {design_params['macro_place']}")
+    print(f"  {'Filler Stage':<25} {filler_stage:<15} {design_params['filler']}")
+    print('=' * 60)
+
+
+# ============================================================
+# OPTION 2 — CSV INPUT WITH VALIDATION
+# ============================================================
+
+elif choice == '2':
+    print('\n' + '=' * 60)
+    print('  CSV INPUT MODE')
+    print('=' * 60)
+
+    filename = input("  Enter CSV file name (e.g. designs.csv): ").strip()
+
+    try:
+        input_df = pd.read_csv(filename)
+        print(f"\n  File     : '{filename}'")
+        print(f"  Rows     : {len(input_df)}")
+        print(f"  Columns  : {list(input_df.columns)}\n")
+
+        REQUIRED_COLS = {
+            'clock_mhz':          'Clock frequency in MHz (e.g. 500)',
+            'utilization_pct':    'Chip utilization percentage (50-95)',
+            'num_macros':         'Number of hard macros (0-20)',
+            'pdn_layers':         'PDN metal layers (1-10)',
+            'gate_count_k':       'Gate count in thousands (1-500)',
+            'placement_strategy': 'Macro placement (edge / center / distributed)',
+            'filler_stage':       'Filler insertion stage (placement / routing)',
+        }
+
+        missing_cols = [c for c in REQUIRED_COLS if c not in input_df.columns]
+
+        if missing_cols:
+            print("  Missing required columns:")
+            for col in missing_cols:
+                print(f"    '{col}'  →  {REQUIRED_COLS[col]}")
+            all_params = []
+            raise ValueError("Missing columns")
+
+        all_errors = {}
+        for idx, row in input_df.iterrows():
+            errs = []
+            try:
+                v = float(row['clock_mhz'])
+                if not (1 <= v <= 1000):
+                    errs.append(f"clock_mhz={v} → must be 1-1000")
+            except Exception:
+                errs.append(f"clock_mhz='{row['clock_mhz']}' → must be a number")
+            try:
+                v = float(row['utilization_pct'])
+                if not (50 <= v <= 95):
+                    errs.append(f"utilization_pct={v} → must be 50-95")
+            except Exception:
+                errs.append("utilization_pct must be a number")
+            try:
+                v = int(row['num_macros'])
+                if not (0 <= v <= 20):
+                    errs.append(f"num_macros={v} → must be 0-20")
+            except Exception:
+                errs.append("num_macros must be a whole number")
+            try:
+                v = int(row['pdn_layers'])
+                if not (1 <= v <= 10):
+                    errs.append(f"pdn_layers={v} → must be 1-10")
+            except Exception:
+                errs.append("pdn_layers must be a whole number")
+            try:
+                v = int(row['gate_count_k'])
+                if not (1 <= v <= 500):
+                    errs.append(f"gate_count_k={v} → must be 1-500")
+            except Exception:
+                errs.append("gate_count_k must be a whole number")
+            if str(row['placement_strategy']).strip().lower() not in ['edge', 'center', 'distributed']:
+                errs.append("placement_strategy must be: edge / center / distributed")
+            if str(row['filler_stage']).strip().lower() not in ['placement', 'routing']:
+                errs.append("filler_stage must be: placement / routing")
+            if errs:
+                all_errors[idx + 1] = errs
+
+        if all_errors:
+            print(f"  Errors found in {len(all_errors)} row(s):\n")
+            for row_num, errs in all_errors.items():
+                print(f"  Row {row_num}:")
+                for e in errs:
+                    print(f"    → {e}")
+            all_params = []
+        else:
+            all_params = []
+            for _, row in input_df.iterrows():
+                all_params.append(map_params(
+                    float(row['clock_mhz']),   float(row['utilization_pct']),
+                    int(row['num_macros']),     int(row['pdn_layers']),
+                    int(row['gate_count_k']),   str(row['placement_strategy']),
+                    str(row['filler_stage'])
+                ))
+            design_params = all_params[0]
+            print(f"  CSV accepted! {len(all_params)} design(s) ready.\n")
+            print(pd.DataFrame(all_params).to_string())
+
+    except ValueError:
+        all_params = []
+    except Exception as e:
+        print(f"  Could not read CSV: {e}")
+        all_params = []
+
+if not all_params:
+    print("\n  No valid inputs. Exiting.")
+    sys.exit(1)
+
+
+# ============================================================
+# STEP 3 — PREDICTION
+# ============================================================
+
+results = []
+pred    = 0.0
+level   = ''
+
+for i, params in enumerate(all_params):
+    try:
+        d_enc = le_design.transform([params['design_name']])[0]
+    except Exception:
+        d_enc = 0
+    try:
+        v_enc = le_variant.transform([params['variant']])[0]
+    except Exception:
+        v_enc = 0
+
+    feat = pd.DataFrame([{
+        'design_encoded':  d_enc,
+        'variant_encoded': v_enc,
+        'macros':          params['macros'],
+        'clock_ns':        params['clock_ns'],
+        'utilization':     params['utilization'],
+        'macro_place':     params['macro_place'],
+        'power_mesh':      params['power_mesh'],
+        'filler':          params['filler'],
+    }])
+
+    pred = rf.predict(feat)[0]
+
+    if pred < 0.05:
+        level = 'LOW'
+        recs  = ["Design is power-efficient. No major changes needed."]
+    elif pred < 0.15:
+        level = 'MODERATE'
+        recs  = [
+            "Consider clock gating on inactive modules.",
+            "Review utilization — slight reduction may help.",
+            "Optimize power mesh density.",
+        ]
+    else:
+        level = 'HIGH'
+        recs  = [
+            "Apply aggressive clock gating on idle modules.",
+            "Reduce switching activity in datapath modules.",
+            "Use operand isolation to prevent unnecessary toggling.",
+            "Consider reducing clock frequency if timing allows.",
+            "Strengthen power mesh to reduce IR drop.",
+        ]
+    if params['clock_ns'] <= 2:
+        recs.append("High-frequency design — switching power is dominant.")
+    if params['utilization'] >= 0.85:
+        recs.append("High utilization — dense placement increases power density.")
+
+    results.append({**params, 'predicted_power': pred, 'power_level': level})
+
+    emoji = {'LOW': '🟢', 'MODERATE': '🟡', 'HIGH': '🔴'}.get(level, '')
+    print('\n' + '=' * 60)
+    print(f"  DESIGN {i+1} PREDICTION")
+    print('=' * 60)
+    print(f"  Clock       : {params['clock_ns']}ns  ({1000 // params['clock_ns']} MHz)")
+    print(f"  Utilization : {params['utilization']*100:.0f}%")
+    print(f"  Predicted   : {pred:.4f}")
+    print(f"  Level       : {emoji} {level}")
+    print(f"\n  Recommendations:")
+    for j, r in enumerate(recs, 1):
+        print(f"    {j}. {r}")
+
+# ============================================================
+# FIX 1: Summary bar chart — now properly saved to CSV and PNG
+# ============================================================
+if len(results) > 1:
+    results_df = pd.DataFrame(results)
+    print('\n' + '=' * 60)
+    print('  SUMMARY — All Designs')
+    print('=' * 60)
+    print(results_df[['clock_ns', 'utilization',
+                       'predicted_power', 'power_level']].to_string())
+    results_df.to_csv('prediction_results.csv', index=False)
+    print("\n  Saved: prediction_results.csv")
+
+    colors = ['green'  if l == 'LOW' else
+              'orange' if l == 'MODERATE' else 'red'
+              for l in results_df['power_level']]
+
+    # ── FIX 1: Wider figure + rotated x-labels to prevent overlap ──
+    n_designs = len(results_df)
+    fig_width = max(12, n_designs * 0.85)          # scale width with design count
+    fig, ax = plt.subplots(figsize=(fig_width, 6))
+
+    bars = ax.bar([f'Design {i+1}' for i in range(n_designs)],
+                  results_df['predicted_power'],
+                  color=colors, edgecolor='black')
+
+    for bar, val in zip(bars, results_df['predicted_power']):
+        ax.text(bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.005,
+                f'{val:.3f}', ha='center', fontsize=9)
+
+    ax.axhline(y=0.05, color='green',  linestyle='--', label='Low threshold (0.05)')
+    ax.axhline(y=0.15, color='orange', linestyle='--', label='Moderate threshold (0.15)')
+
+    ax.legend(handles=[
+        mpatches.Patch(color='green',  label='LOW'),
+        mpatches.Patch(color='orange', label='MODERATE'),
+        mpatches.Patch(color='red',    label='HIGH'),
+    ])
+
+    # Rotate x-axis labels so they don't overlap
+    ax.set_xticks(range(n_designs))
+    ax.set_xticklabels([f'Design {i+1}' for i in range(n_designs)],
+                       rotation=45, ha='right', fontsize=9)
+
+    ax.set_ylabel('Predicted Power (IR Drop proxy)')
+    ax.set_title('Power Prediction — All Designs from CSV')
+    plt.tight_layout()
+    plt.savefig('csv_predictions.png', dpi=150, bbox_inches='tight')   # ← FIX 1: was missing
+    plt.show()
+    print("  Saved: csv_predictions.png")
+
+design_params = all_params[0]
+
+
+# ============================================================
+# STEP 4 — BUILD IR DROP MAP
+# ============================================================
+
+print('\n' + '=' * 60)
+print('  BUILDING IR DROP MAP...')
+print('=' * 60)
+
+ir_drop_path = 'IR_drop'
+ir_map, sample_file = build_ir_map(design_params, pred, ir_drop_path, df)
+
+print(f"  Heatmap shape : {ir_map.shape}")
+print(f"  IR range      : [{ir_map.min():.4f}, {ir_map.max():.4f}]")
+
+
+# ============================================================
+# STEP 5 — NAMED MODULE ANALYSIS
+# ============================================================
+
+design_name = design_params['design_name']
+if design_name not in MODULE_LAYOUT:
+    print(f"  Note: '{design_name}' not in MODULE_LAYOUT — using RISCY layout")
+    design_name = 'RISCY'
+
+plot_module_heatmap(ir_map, design_name, sample_file,
+                    save_path='module_heatmap.png')
+
+full_module_report(ir_map, design_name, design_params)
+
+
+# ============================================================
+# STEP 6 — 3-PANEL SUMMARY PLOT  (FIXES 2 & 3 here)
+# ============================================================
+
+module_stats   = extract_module_power(ir_map, design_name)
+layout         = MODULE_LAYOUT.get(design_name, MODULE_LAYOUT['RISCY'])
+rows, cols     = ir_map.shape
+level_emoji    = {'LOW': '[LOW]', 'MODERATE': '[MODERATE]',
+                  'HIGH': '[HIGH]'}.get(level, level)
+
+all_means          = [s['mean_ir'] for s in module_stats.values()]
+threshold_high     = np.percentile(all_means, 70)
+threshold_moderate = np.percentile(all_means, 40)
+
+mod_records = []
+for m in layout:
+    s = module_stats[m['name']]
+    severity, _, _ = get_module_recommendations(
+        m['name'], s['mean_ir'], threshold_high, threshold_moderate)
+    mod_records.append({
+        'module':      m['name'],
+        'mean_power':  s['mean_ir'],
+        'max_power':   s['max_ir'],
+        'is_hotspot':  severity == 'HIGH',
+        'severity':    severity,
+        'r0': int(m['r0'] * rows), 'r1': int(m['r1'] * rows),
+        'c0': int(m['c0'] * cols), 'c1': int(m['c1'] * cols),
+    })
+module_df = pd.DataFrame(mod_records)
+
+fig = plt.figure(figsize=(22, 8))
+fig.suptitle(
+    f"Module-Level Power Analysis  |  {design_name}-{design_params['variant']}  |  "
+    f"Clock: {1000 // design_params['clock_ns']}MHz  |  "
+    f"Util: {design_params['utilization']*100:.0f}%  |  "
+    f"Power: {pred:.4f} ({level_emoji})",
+    fontsize=11, fontweight='bold'
+)
+
+# ── Panel 1: IR drop heatmap with named module grid ──────────
+ax1 = fig.add_subplot(131)
+im1 = ax1.imshow(ir_map, cmap='hot', aspect='auto', vmin=0, vmax=1)
+plt.colorbar(im1, ax=ax1, label='Normalised IR Drop', fraction=0.046, pad=0.04)
+
+tab_colors = plt.cm.tab10.colors
+for i, row_m in module_df.iterrows():
+    rect = plt.Rectangle(
+        (row_m['c0'], row_m['r0']),
+        row_m['c1'] - row_m['c0'],
+        row_m['r1'] - row_m['r0'],
+        fill=False, edgecolor=tab_colors[i % 10], linewidth=1.5
+    )
+    ax1.add_patch(rect)
+    cx = (row_m['c0'] + row_m['c1']) / 2
+    cy = (row_m['r0'] + row_m['r1']) / 2
+    ax1.text(cx, cy, row_m['module'],
+             color='red' if row_m['is_hotspot'] else 'white',
+             fontsize=7, ha='center', va='center', fontweight='bold')
+
+ax1.set_title('IR Drop Heatmap + Module Grid\n(Red label = High Power)', fontsize=10)
+ax1.set_xlabel('X tiles')
+ax1.set_ylabel('Y tiles')
+
+# ── Panel 2: Module power heatmap (named grid) ───────────────
+# FIX 2 & 3: Use a layout where last row has exactly the remaining
+#            modules (no empty/white padding cells).
+ax2 = fig.add_subplot(132)
+n_mods     = len(module_df)
+power_vals = module_df['mean_power'].values
+
+# Choose grid dimensions so the last row is never empty by >1 cell
+# Strategy: prefer a 3-column grid; last row gets only n_mods % 3 cells
+n_cols     = 3
+n_rows     = int(np.ceil(n_mods / n_cols))
+last_row_count = n_mods - (n_rows - 1) * n_cols   # 1, 2, or 3
+
+# Build a full masked array; mask out trailing empty slots
+pad_size   = n_rows * n_cols
+power_pad  = np.full(pad_size, np.nan)
+power_pad[:n_mods] = power_vals
+power_grid = power_pad.reshape(n_rows, n_cols)
+masked_grid = np.ma.masked_invalid(power_grid)     # NaN cells → masked (transparent)
+
+# FIX 2: Use a dedicated axes with controlled aspect so colorbar doesn't overlap
+im2 = ax2.imshow(masked_grid, cmap='RdYlGn_r', aspect='auto',
+                 vmin=np.nanmin(power_vals), vmax=np.nanmax(power_vals))
+# Shrink colorbar to match axes height exactly; pad keeps it clear of text
+cbar2 = plt.colorbar(im2, ax=ax2, label='Mean IR Drop',
+                     fraction=0.046, pad=0.04)
+cbar2.ax.tick_params(labelsize=8)
+
+for idx, row_m in module_df.iterrows():
+    gi = idx // n_cols
+    gj = idx  % n_cols
+    sev_label = {'HIGH': '[H]', 'MODERATE': '[M]', 'LOW': '[L]'}.get(row_m['severity'], '')
+    ax2.text(gj, gi,
+             f"{row_m['module']}\n{row_m['mean_power']:.3f}\n{sev_label}",
+             ha='center', va='center', fontsize=7, fontweight='bold',
+             color='white' if row_m['mean_power'] > np.nanmean(power_vals) else 'black')
+
+ax2.set_xticks(range(n_cols))
+ax2.set_yticks(range(n_rows))
+ax2.set_xticklabels([])
+ax2.set_yticklabels([])
+ax2.set_title('Module Power Heatmap\n(Red=High, Green=Low)', fontsize=10)
+
+# ── Panel 3: Module ranking bar chart ────────────────────────
+ax3           = fig.add_subplot(133)
+sorted_df     = module_df.sort_values('mean_power', ascending=True)
+p_max         = module_df['mean_power'].max()
+bar_colors_3  = []
+for val in sorted_df['mean_power']:
+    ratio = val / p_max if p_max > 0 else 0
+    bar_colors_3.append('red' if ratio >= 0.75 else
+                        'orange' if ratio >= 0.45 else 'steelblue')
+
+bars = ax3.barh(sorted_df['module'], sorted_df['mean_power'],
+                color=bar_colors_3, edgecolor='black', linewidth=0.5)
+for bar, val in zip(bars, sorted_df['mean_power']):
+    ax3.text(bar.get_width() + 0.002,
+             bar.get_y() + bar.get_height() / 2,
+             f'{val:.3f}', va='center', fontsize=7)
+
+ax3.axvline(x=threshold_high, color='red', linestyle='--',
+            linewidth=1.5, label='High power threshold')
+ax3.set_xlabel('Mean IR Drop (Power Proxy)')
+ax3.set_title('Module Power Ranking', fontsize=10)
+ax3.legend(handles=[
+    mpatches.Patch(color='red',       label='High Power'),
+    mpatches.Patch(color='orange',    label='Moderate Power'),
+    mpatches.Patch(color='steelblue', label='Low Power'),
+], fontsize=8)
+
+plt.tight_layout()
+plt.savefig('module_analysis.png', dpi=150, bbox_inches='tight')
+plt.show()
+print("  Saved: module_analysis.png")
+
+
+# ============================================================
+# STEP 7 — FINAL MODULE REPORT (console)
+# ============================================================
+
+top_mod  = module_df.nlargest(1, 'mean_power').iloc[0]['module']
+hotspots = module_df[module_df['is_hotspot']]
+
+print('\n' + '=' * 55)
+print('         MODULE-LEVEL POWER REPORT')
+print('=' * 55)
+print(f"\n  Total modules : {len(module_df)}")
+print(f"  🔴 Hotspots   : {len(hotspots)}")
+print(f"  🟢 Normal     : {len(module_df) - len(hotspots)}")
+print(f"\n  Top Power-Hungry Modules:")
+for _, row_m in module_df.nlargest(5, 'mean_power').iterrows():
+    print(f"    {row_m['module']:<20} "
+          f"Mean={row_m['mean_power']:.4f}  "
+          f"Max={row_m['max_power']:.4f}  "
+          f"{row_m['severity']}")
+print(f"\n  Priority attention needed on: {top_mod}")
+print('=' * 55)
+print('\n  Done! Output files: module_heatmap.png  module_analysis.png  csv_predictions.png')   
