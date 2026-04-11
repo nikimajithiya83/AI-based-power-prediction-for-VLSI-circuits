@@ -3,10 +3,13 @@
 An AI-powered system for predicting power dissipation in digital circuits at an early design phase — eliminating the need for full EDA tool simulation.
 
 **Overview**
+
 Power dissipation is one of the most critical challenges in modern VLSI design. Traditional power estimation relies on EDA tools like Synopsys or Cadence — a process that is slow, expensive, and can only be applied late in the design cycle. This project builds a machine learning system that predicts power dissipation from circuit design parameters at an early stage, without running any physical simulation.
 
 **Dataset**
-**Source:** CircuitNet-N28 (28nm technology node) — an open benchmark dataset for ML in EDA, published by Peking University.
+
+**Source:** 
+CircuitNet-N28 (28nm technology node) — an open benchmark dataset for ML in EDA, published by Peking University.
 
 - 10,242 samples generated from real open-source RISC-V CPU designs (RISCY, RISCY-FPU, zero-riscy)
 - Each sample represents a unique chip layout configuration varied across clock frequency, utilization, macro count, power mesh, and macro placement
@@ -14,6 +17,7 @@ Power dissipation is one of the most critical challenges in modern VLSI design. 
 
 
 **What the System Does**
+
 1. Feature Extraction
 Design parameters are extracted from each circuit configuration — clock period, utilization, macro count, power mesh density, macro placement, and filler insertion. Statistical features like mean, max, standard deviation, and 90th/99th percentile IR drop are derived from the spatial maps.
 2. Power Prediction Model
