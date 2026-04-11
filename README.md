@@ -1,4 +1,4 @@
-**⚡# AI-Based Power Dissipation Prediction and Optimization in VLSI Design**
+**⚡AI-Based Power Dissipation Prediction and Optimization in VLSI Design**
 
 An AI-powered system for predicting power dissipation in digital circuits at an early design phase — eliminating the need for full EDA tool simulation.
 
