@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLSI Power Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:        #f4f6fb;
+  --surface:   #ffffff;
+  --border:    #e2e6f0;
+  --border2:   #cdd3e3;
+  --indigo:    #4f46e5;
+  --violet:    #7c3aed;
+  --teal:      #0d9488;
+  --amber:     #d97706;
+  --rose:      #e11d48;
+  --slate:     #334155;
+  --low:       #059669;
+  --moderate:  #d97706;
+  --high:      #e11d48;
+  --text:      #1e293b;
+  --sub:       #64748b;
+  --muted:     #94a3b8;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
+  --shadow:    0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.10);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;font-size:15px;background:var(--bg);color:var(--text);min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,#c7d0e8 1px,transparent 1px);background-size:28px 28px;pointer-events:none;z-index:0;opacity:.4}
+
+/* HEADER */
+header{position:relative;z-index:10;background:#fff;border-bottom:1px solid var(--border);box-shadow:var(--shadow-sm);padding:0 48px;display:flex;align-items:center;justify-content:space-between;height:72px}
+.logo{display:flex;align-items:center;gap:14px}
+.logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--indigo),var(--violet));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 12px rgba(79,70,229,.3)}
+.logo-text h1{font-family:'Syne',sans-serif;font-size:19px;font-weight:800;color:var(--text);letter-spacing:-.3px;line-height:1}
+.logo-text p{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.5px;margin-top:2px}
+.header-right{display:flex;align-items:center;gap:10px}
+.badge{display:flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--border);border-radius:20px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--sub);background:var(--bg)}
+.dot{width:7px;height:7px;border-radius:50%}
+.dot.green{background:var(--low);box-shadow:0 0 0 3px rgba(5,150,105,.15);animation:blink 2s infinite}
+.dot.amber{background:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.15)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* DOWNLOAD REPORT BTN — colourful rainbow-gradient */
+.dl-report-btn{
+  display:flex;align-items:center;gap:8px;padding:10px 20px;
+  background:linear-gradient(135deg,#f59e0b,#ef4444,#8b5cf6,#06b6d4);
+  background-size:300% 300%;
+  animation:gradShift 4s ease infinite;
+  color:#fff;border:none;border-radius:10px;
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:.3px;
+  cursor:pointer;
+  box-shadow:0 4px 18px rgba(139,92,246,.4),0 2px 6px rgba(0,0,0,.15);
+  transition:all .25s;opacity:.35;pointer-events:none;
+  position:relative;overflow:hidden;
+}
+.dl-report-btn::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.15),transparent);
+  pointer-events:none;
+}
+.dl-report-btn.active{opacity:1;pointer-events:all}
+.dl-report-btn.active:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 8px 28px rgba(139,92,246,.55),0 4px 12px rgba(0,0,0,.2)}
+.dl-report-btn .btn-icon{font-size:15px;animation:bounce 2s ease infinite}
+@keyframes gradShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+
+/* MAIN */
+main{position:relative;z-index:5;max-width:1340px;margin:0 auto;padding:32px 48px 80px}
+.page-intro{margin-bottom:24px}
+.page-intro h2{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--text);letter-spacing:-.5px}
+.page-intro p{color:var(--sub);font-size:14px;margin-top:4px}
+
+/* TABS */
+.tabs{display:flex;gap:0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:4px;width:fit-content;margin-bottom:28px;box-shadow:var(--shadow-sm)}
+.tab-btn{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;padding:9px 24px;border:none;cursor:pointer;background:transparent;color:var(--muted);border-radius:9px;transition:all .2s;letter-spacing:.2px}
+.tab-btn.active{background:var(--indigo);color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3)}
+.tab-btn:not(.active):hover{color:var(--indigo);background:rgba(79,70,229,.06)}
+
+/* GRID */
+.grid{display:grid;grid-template-columns:1fr 430px;gap:24px;align-items:start}
+
+/* CARD */
+.card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:28px 32px;box-shadow:var(--shadow);animation:fadeUp .35s ease both}
+.card+.card{animation-delay:.07s}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:22px;display:flex;align-items:center;gap:10px}
+.card-title .ct-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.card-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* FORM */
+.fields-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field.full{grid-column:1/-1}
+label{font-size:12px;font-weight:600;color:var(--slate);letter-spacing:.3px;display:flex;align-items:center;gap:6px}
+.label-chip{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:500;padding:2px 6px;border-radius:4px;background:rgba(79,70,229,.08);color:var(--indigo)}
+.field-hint{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+input[type="number"],select{background:var(--bg);border:1.5px solid var(--border);border-radius:9px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;padding:10px 14px;outline:none;width:100%;-webkit-appearance:none;appearance:none;transition:border-color .18s,box-shadow .18s}
+input[type="number"]:focus,select:focus{border-color:var(--indigo);box-shadow:0 0 0 3px rgba(79,70,229,.12);background:#fff}
+input[type="number"]::placeholder{color:var(--muted);font-size:13px}
+select option{background:#fff}
+.slider-wrap{display:flex;align-items:center;gap:12px}
+input[type="range"]{flex:1;-webkit-appearance:none;height:5px;border-radius:99px;background:var(--border);outline:none}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--indigo);cursor:pointer;border:3px solid #fff;box-shadow:0 2px 6px rgba(79,70,229,.35)}
+.slider-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;color:var(--indigo);min-width:44px;text-align:right}
+
+/* PREDICT BTN */
+.predict-btn{width:100%;margin-top:24px;padding:14px;background:linear-gradient(135deg,var(--indigo),var(--violet));border:none;border-radius:11px;color:#fff;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;cursor:pointer;box-shadow:0 4px 14px rgba(79,70,229,.35);transition:all .22s}
+.predict-btn:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(79,70,229,.4)}
+.predict-btn:disabled{background:var(--border2);color:var(--muted);box-shadow:none;cursor:not-allowed;transform:none}
+
+/* DROP ZONE */
+.drop-zone{border:2px dashed var(--border2);border-radius:12px;padding:44px 28px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg)}
+.drop-zone:hover,.drop-zone.dragging{border-color:var(--indigo);background:rgba(79,70,229,.04)}
+.drop-icon{font-size:38px;margin-bottom:12px}
+.drop-text{font-size:15px;font-weight:600;color:var(--sub)}
+.drop-sub{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7}
+.template-link{display:inline-block;margin-top:14px;font-size:12px;font-weight:600;color:var(--indigo);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+#csv-file-input{display:none}
+
+/* CSV ERROR PANEL */
+.csv-error-panel{margin-top:18px;border:1.5px solid #fca5a5;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(225,29,72,.08)}
+.csv-error-header{background:linear-gradient(135deg,#fee2e2,#fef3c7);padding:14px 18px;display:flex;align-items:flex-start;gap:12px;border-bottom:1px solid #fca5a5}
+.csv-error-icon{font-size:22px;flex-shrink:0;margin-top:1px}
+.csv-error-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#991b1b;margin-bottom:3px}
+.csv-error-subtitle{font-size:12px;color:#b45309;line-height:1.5}
+
+/* MANUAL REDIRECT BANNER — colourful */
+.manual-redirect-banner{
+  background:linear-gradient(135deg,#eef2ff,#fdf4ff,#f0fdfa);
+  border:2px solid transparent;
+  background-clip:padding-box;
+  border-radius:12px;padding:18px 20px;margin:0 18px 0;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  position:relative;
+}
+.manual-redirect-banner::before{
+  content:'';position:absolute;inset:-2px;border-radius:14px;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6,#06b6d4,#10b981);
+  z-index:-1;animation:gradShift 3s ease infinite;background-size:300% 300%;
+}
+.manual-redirect-text{font-size:13px;color:var(--slate);line-height:1.5}
+.manual-redirect-text strong{color:var(--indigo)}
+.switch-manual-btn{
+  flex-shrink:0;padding:10px 20px;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed,#0d9488);
+  background-size:200% 200%;animation:gradShift 3s ease infinite;
+  color:#fff;border:none;border-radius:9px;
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:.3px;
+  cursor:pointer;white-space:nowrap;transition:all .22s;
+  box-shadow:0 4px 14px rgba(79,70,229,.35);
+}
+.switch-manual-btn:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(79,70,229,.45)}
+
+.csv-guide{padding:18px 20px;background:#fff}
+.csv-guide-title{font-size:12px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+.guide-step{display:flex;gap:14px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)}
+.guide-step:last-child{border-bottom:none}
+.step-num{width:24px;height:24px;border-radius:50%;background:var(--indigo);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.step-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
+.step-desc{font-size:12px;color:var(--sub);line-height:1.5}
+.col-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+.col-table th{background:rgba(79,70,229,.07);color:var(--indigo);padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border)}
+.col-table td{padding:6px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.col-table tr:last-child td{border-bottom:none}
+.col-name{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--violet);white-space:nowrap}
+.col-example{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--teal)}
+.row-errors{background:#fff7f7;border-top:1px solid #fca5a5;padding:14px 20px}
+.row-errors-title{font-size:12px;font-weight:700;color:#991b1b;margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px}
+.row-err-item{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #fee2e2;font-size:12px}
+.row-err-item:last-child{border-bottom:none}
+.row-err-badge{background:var(--high);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0;margin-top:1px}
+
+/* CSV PREVIEW */
+.csv-preview{margin-top:16px;border:1px solid var(--border);border-radius:10px;overflow:auto;max-height:200px}
+.csv-preview table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:11px}
+.csv-preview th{background:rgba(79,70,229,.07);color:var(--indigo);padding:7px 11px;text-align:left;letter-spacing:.5px;border-bottom:1px solid var(--border);position:sticky;top:0;white-space:nowrap}
+.csv-preview td{padding:6px 11px;border-bottom:1px solid var(--border);color:var(--text)}
+
+/* RESULTS */
+#results-panel{display:flex;flex-direction:column;gap:20px}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:360px;gap:14px;text-align:center;background:#fff;border:1px dashed var(--border2);border-radius:16px;box-shadow:var(--shadow-sm)}
+.empty-icon{font-size:44px;opacity:.25}
+.empty-text{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--muted);letter-spacing:.3px}
+.empty-sub{font-size:13px;color:var(--muted);max-width:200px;line-height:1.6}
+
+/* POWER CARD */
+.power-card{border-radius:12px;padding:24px;text-align:center;position:relative;overflow:hidden}
+.power-card.low-card{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1.5px solid #6ee7b7}
+.power-card.moderate-card{background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #fcd34d}
+.power-card.high-card{background:linear-gradient(135deg,#fff1f2,#ffe4e6);border:1.5px solid #fda4af}
+.power-label{font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--sub);margin-bottom:8px}
+.power-value{font-family:'Syne',sans-serif;font-size:54px;font-weight:800;line-height:1}
+.power-card.low-card .power-value{color:var(--low)}
+.power-card.moderate-card .power-value{color:var(--moderate)}
+.power-card.high-card .power-value{color:var(--high)}
+.power-unit{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sub);margin-top:5px;letter-spacing:.5px}
+.level-badge{display:inline-flex;align-items:center;gap:8px;margin-top:16px;padding:8px 20px;border-radius:99px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;border:1.5px solid}
+.level-badge.low{color:var(--low);border-color:#34d399;background:rgba(5,150,105,.1)}
+.level-badge.moderate{color:var(--moderate);border-color:#fbbf24;background:rgba(217,119,6,.1)}
+.level-badge.high{color:var(--high);border-color:#fb7185;background:rgba(225,29,72,.1)}
+.power-bar-wrap{margin-top:16px}
+.power-bar-track{height:7px;background:rgba(0,0,0,.06);border-radius:99px;overflow:hidden}
+.power-bar-fill{height:100%;border-radius:99px;transition:width .9s cubic-bezier(.4,0,.2,1)}
+.power-bar-marks{display:flex;justify-content:space-between;margin-top:5px;font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--muted)}
+.power-bar-marks .active{color:var(--slate);font-weight:600}
+.params-mini{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:16px}
+.param-chip{background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 12px;box-shadow:var(--shadow-sm)}
+.param-key{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:3px}
+.param-val{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);font-weight:500}
+
+/* CHART CONTAINERS */
+.chart-wrap{position:relative;height:220px;margin-top:8px}
+
+/* MODULE BARS */
+.modules-list{display:flex;flex-direction:column;gap:10px}
+.module-row{display:grid;grid-template-columns:140px 1fr 58px 76px;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.module-row:last-child{border-bottom:none}
+.mod-name{font-size:12px;font-weight:500;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mod-bar{height:6px;background:var(--bg);border-radius:99px}
+.mod-bar-fill{height:100%;border-radius:99px;transition:width .65s ease}
+.mod-val{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);text-align:right}
+.mod-tag{font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;text-align:center;letter-spacing:.5px}
+.mod-tag.high{background:#fee2e2;color:var(--rose)}
+.mod-tag.moderate{background:#fef3c7;color:var(--amber)}
+.mod-tag.low{background:#dcfce7;color:var(--low)}
+
+/* RECS */
+.recs-list{display:flex;flex-direction:column;gap:10px}
+.rec-item{display:flex;gap:13px;align-items:flex-start;padding:12px 14px;border-radius:9px;background:var(--bg);border-left:3px solid var(--amber);font-size:13px;line-height:1.55}
+.rec-item.mod-rec{border-left-color:var(--indigo)}
+.rec-num{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:var(--amber);min-width:20px;padding-top:2px}
+.rec-item.mod-rec .rec-num{color:var(--indigo)}
+.mod-rec-block{margin-bottom:16px}
+.mod-rec-header{font-size:12px;font-weight:700;color:var(--violet);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.mod-rec-src{color:var(--muted);font-size:11px;font-weight:400}
+
+/* CSV RESULTS TABLE */
+.results-table{width:100%;border-collapse:collapse;font-size:13px}
+.results-table th{background:rgba(79,70,229,.06);color:var(--indigo);padding:10px 14px;text-align:left;font-weight:700;border-bottom:2px solid var(--border);font-size:12px}
+.results-table td{padding:10px 14px;border-bottom:1px solid var(--border)}
+.results-table tr:hover td{background:rgba(79,70,229,.02)}
+.summary-counts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px}
+.count-card{padding:16px;text-align:center;border-radius:11px;border:1.5px solid}
+.count-card.low{border-color:#6ee7b7;background:#ecfdf5}
+.count-card.moderate{border-color:#fcd34d;background:#fffbeb}
+.count-card.high{border-color:#fda4af;background:#fff1f2}
+.count-num{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;line-height:1}
+.count-card.low .count-num{color:var(--low)}
+.count-card.moderate .count-num{color:var(--moderate)}
+.count-card.high .count-num{color:var(--high)}
+.count-lbl{font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.8px;margin-top:4px}
+
+/* TOAST */
+.toast{position:fixed;bottom:28px;right:32px;background:var(--slate);color:#fff;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);z-index:100;transform:translateX(130%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;gap:8px}
+.toast.show{transform:translateX(0)}
+.toast.error{background:var(--rose)}
+.toast.success{background:var(--low)}
+
+.hidden{display:none!important}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:1060px){.grid{grid-template-columns:1fr}main,header{padding-left:24px;padding-right:24px}}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+
+/* ══════════════════════════════════════════
+   PDF REPORT MODAL
+══════════════════════════════════════════ */
+.report-modal-overlay{
+  position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);
+  z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;
+  animation:fadeIn .2s ease;
+}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.report-modal{
+  background:#fff;border-radius:20px;width:100%;max-width:820px;
+  max-height:90vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,.2);
+  animation:slideUp .3s cubic-bezier(.4,0,.2,1);
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+
+/* REPORT CONTENT (rendered inside modal) */
+.report-doc{font-family:'DM Sans',sans-serif;color:#1e293b;font-size:13px}
+
+.report-header-band{
+  background:linear-gradient(135deg,#1e1b4b,#4f46e5,#7c3aed);
+  padding:32px 36px;color:#fff;position:relative;overflow:hidden;border-radius:20px 20px 0 0;
+}
+.report-header-band::before{
+  content:'';position:absolute;inset:0;opacity:.15;
+  background-image:radial-gradient(circle,rgba(255,255,255,.3) 1px,transparent 1px);
+  background-size:18px 18px;
+}
+.rh-logo{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.rh-logo-icon{background:rgba(255,255,255,.15);border-radius:10px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;border:1px solid rgba(255,255,255,.2)}
+.rh-meta-row{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-top:14px;position:relative;z-index:1}
+.rh-meta-left{font-size:12px;line-height:2;opacity:.9;font-family:'JetBrains Mono',monospace}
+.rh-stamp{text-align:right;font-size:11px;opacity:.75;font-family:'JetBrains Mono',monospace;line-height:1.9}
+.rh-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:99px;padding:4px 12px;font-size:11px;font-weight:600;margin-top:10px}
+
+.report-body{padding:32px 36px}
+
+.report-section{margin-bottom:30px}
+.report-section-title{
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--indigo);margin-bottom:14px;
+  display:flex;align-items:center;gap:10px;padding-bottom:8px;
+  border-bottom:2px solid;border-image:linear-gradient(90deg,var(--indigo),transparent) 1;
+}
+
+.report-power-hero{
+  background:linear-gradient(135deg,#eef2ff,#f5f3ff,#f0fdfa);
+  border:1.5px solid #c7d2fe;border-radius:14px;padding:24px 28px;
+  display:flex;align-items:center;gap:28px;margin-bottom:20px;
+}
+.rph-value{font-family:'Syne',sans-serif;font-size:56px;font-weight:800;line-height:1}
+.rph-value.low{color:var(--low)}
+.rph-value.moderate{color:var(--moderate)}
+.rph-value.high{color:var(--high)}
+.rph-label{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.rph-level{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:99px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;border:1.5px solid;margin-top:8px}
+.rph-level.low{color:var(--low);border-color:#34d399;background:rgba(5,150,105,.1)}
+.rph-level.moderate{color:var(--moderate);border-color:#fbbf24;background:rgba(217,119,6,.1)}
+.rph-level.high{color:var(--high);border-color:#fb7185;background:rgba(225,29,72,.1)}
+
+.report-params-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+.rp-chip{background:#f8faff;border:1px solid #e2e8f0;border-radius:10px;padding:11px 14px}
+.rp-chip-key{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.5px;margin-bottom:3px}
+.rp-chip-val{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);font-weight:600}
+
+.report-chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+.report-chart-box{background:#f8faff;border:1px solid #e2e8f0;border-radius:12px;padding:18px;height:240px;position:relative}
+.report-chart-box.full{grid-column:1/-1;height:260px}
+.rc-label{font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+
+.report-module-row{display:grid;grid-template-columns:140px 1fr 60px 80px;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f1f5f9}
+.report-module-row:last-child{border-bottom:none}
+.rmr-name{font-size:12px;font-weight:500;color:var(--slate)}
+.rmr-bar{height:6px;background:#f1f5f9;border-radius:99px}
+.rmr-fill{height:100%;border-radius:99px}
+.rmr-val{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);text-align:right}
+.rmr-tag{font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;text-align:center}
+.rmr-tag.high{background:#fee2e2;color:#e11d48}
+.rmr-tag.moderate{background:#fef3c7;color:#d97706}
+.rmr-tag.low{background:#dcfce7;color:#059669}
+
+.report-rec-item{display:flex;gap:12px;padding:10px 14px;border-radius:9px;background:#f8faff;border-left:3px solid var(--amber);font-size:12px;line-height:1.55;margin-bottom:8px}
+.report-rec-num{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--amber);min-width:20px;padding-top:1px}
+
+.report-footer{
+  background:linear-gradient(135deg,#f8faff,#fdf4ff);
+  border-top:2px solid #e2e8f0;padding:20px 36px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-radius:0 0 20px 20px;
+}
+.rf-note{font-size:11px;color:var(--muted);line-height:1.6;max-width:460px}
+.rf-logo{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--indigo)}
+
+/* MODAL ACTION BAR */
+.modal-actions{
+  background:#fff;border-top:1px solid var(--border);padding:18px 32px;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  position:sticky;bottom:0;border-radius:0 0 20px 20px;
+}
+.modal-close-btn{
+  padding:10px 22px;background:var(--bg);border:1.5px solid var(--border);
+  border-radius:9px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;
+  color:var(--slate);cursor:pointer;transition:all .2s;
+}
+.modal-close-btn:hover{background:#f1f5f9;border-color:var(--border2)}
+.modal-print-btn{
+  display:flex;align-items:center;gap:9px;padding:11px 26px;
+  background:linear-gradient(135deg,#f59e0b,#ef4444,#8b5cf6,#06b6d4);
+  background-size:300% 300%;animation:gradShift 3s ease infinite;
+  color:#fff;border:none;border-radius:10px;
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:.3px;
+  cursor:pointer;box-shadow:0 4px 16px rgba(139,92,246,.35);transition:all .22s;
+}
+.modal-print-btn:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(139,92,246,.5)}
+
+/* CSV REPORT SPECIFIC */
+.report-csv-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.rcs-card{padding:18px;border-radius:12px;text-align:center;border:2px solid}
+.rcs-card.low{background:#ecfdf5;border-color:#6ee7b7}
+.rcs-card.moderate{background:#fffbeb;border-color:#fcd34d}
+.rcs-card.high{background:#fff1f2;border-color:#fda4af}
+.rcs-num{font-family:'Syne',sans-serif;font-size:36px;font-weight:800;line-height:1}
+.rcs-card.low .rcs-num{color:var(--low)}
+.rcs-card.moderate .rcs-num{color:var(--moderate)}
+.rcs-card.high .rcs-num{color:var(--high)}
+.rcs-lbl{font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.8px;margin-top:4px}
+
+.report-table{width:100%;border-collapse:collapse;font-size:12px}
+.report-table th{background:rgba(79,70,229,.07);color:var(--indigo);padding:9px 12px;text-align:left;font-weight:700;border-bottom:2px solid #e2e8f0}
+.report-table td{padding:8px 12px;border-bottom:1px solid #f1f5f9}
+.report-table tr:last-child td{border-bottom:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div class="logo-text">
+      <h1>VLSI Power Predictor</h1>
+      <p>CircuitNet-N28 · Random Forest · R²=0.70</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="badge"><span class="dot green"></span> Model Active</div>
+    <div class="badge"><span class="dot amber"></span> RISC-V Designs</div>
+    <button class="dl-report-btn" id="dl-report-btn" onclick="openReportModal()">
+      <span class="btn-icon">⬇</span> Download Report
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="page-intro">
+    <h2>Power Dissipation Prediction</h2>
+    <p>Enter circuit parameters manually or upload a CSV file for batch prediction across multiple designs.</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="btn-manual" onclick="switchMode('manual')">⊞ &nbsp;Manual Input</button>
+    <button class="tab-btn" id="btn-csv"    onclick="switchMode('csv')">↑ &nbsp;CSV Upload</button>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT -->
+    <div>
+      <!-- MANUAL -->
+      <div class="card" id="manual-panel">
+        <div class="card-title" style="color:var(--indigo)">
+          <span class="ct-dot" style="background:var(--indigo)"></span>
+          Circuit Parameters
+        </div>
+        <div class="fields-grid">
+          <div class="field">
+            <label>Clock Frequency <span class="label-chip">MHz</span></label>
+            <div class="slider-wrap">
+              <input type="range" id="clock_mhz" min="1" max="1000" value="200" oninput="syncSlider('clock_mhz','sv_clock')">
+              <span class="slider-val" id="sv_clock">200</span>
+            </div>
+            <div class="field-hint">Higher freq → dominant switching power</div>
+          </div>
+          <div class="field">
+            <label>Chip Utilization <span class="label-chip">%</span></label>
+            <div class="slider-wrap">
+              <input type="range" id="util_pct" min="50" max="95" value="75" oninput="syncSlider('util_pct','sv_util')">
+              <span class="slider-val" id="sv_util">75</span>
+            </div>
+            <div class="field-hint">Logic area / total chip area</div>
+          </div>
+          <div class="field">
+            <label>Hard Macros <span class="label-chip">0–20</span></label>
+            <input type="number" id="num_macros" min="0" max="20" value="4" placeholder="e.g. 4">
+            <div class="field-hint">SRAMs, PLLs, IP cores</div>
+          </div>
+          <div class="field">
+            <label>PDN Metal Layers <span class="label-chip">1–10</span></label>
+            <input type="number" id="pdn_layers" min="1" max="10" value="4" placeholder="e.g. 4">
+            <div class="field-hint">Power delivery network depth</div>
+          </div>
+          <div class="field">
+            <label>Gate Count <span class="label-chip">K gates</span></label>
+            <input type="number" id="gate_count" min="1" max="500" value="50" placeholder="e.g. 50">
+            <div class="field-hint">≤100K → Variant A · &gt;100K → Variant B</div>
+          </div>
+          <div class="field">
+            <label>Placement Strategy</label>
+            <select id="placement">
+              <option value="edge">Edge</option>
+              <option value="center">Center</option>
+              <option value="distributed">Distributed</option>
+            </select>
+          </div>
+          <div class="field full">
+            <label>Filler Insertion Stage</label>
+            <select id="filler_stage">
+              <option value="routing">After Routing</option>
+              <option value="placement">After Placement</option>
+            </select>
+          </div>
+        </div>
+        <button class="predict-btn" onclick="runManualPredict()">▶ &nbsp; Predict Power Dissipation</button>
+      </div>
+
+      <!-- CSV -->
+      <div class="card hidden" id="csv-panel">
+        <div class="card-title" style="color:var(--indigo)">
+          <span class="ct-dot" style="background:var(--indigo)"></span>
+          CSV Batch Upload
+        </div>
+        <div class="drop-zone" id="drop-zone"
+             onclick="document.getElementById('csv-file-input').click()"
+             ondragover="onDragOver(event)" ondragleave="onDragLeave()" ondrop="onDrop(event)">
+          <div class="drop-icon">📂</div>
+          <div class="drop-text">Drop your CSV here or click to browse</div>
+          <div class="drop-sub">
+            Accepted: .csv · UTF-8 · comma or tab separated<br>
+            Columns: clock_mhz · utilization_pct · num_macros<br>
+            pdn_layers · gate_count_k · placement_strategy · filler_stage
+          </div>
+          <span class="template-link" onclick="dlTemplate(event)">⬇ Download sample template</span>
+        </div>
+        <input type="file" id="csv-file-input" accept=".csv" onchange="handleFile(event)">
+        <div id="csv-error-zone" class="hidden"></div>
+        <div id="csv-preview" class="csv-preview hidden"></div>
+        <button class="predict-btn" id="csv-predict-btn" onclick="runCSVPredict()" disabled>
+          ▶ &nbsp; Predict All Designs
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div id="results-panel">
+      <div class="empty-state">
+        <div class="empty-icon">🔌</div>
+        <div class="empty-text">No Prediction Yet</div>
+        <div class="empty-sub">Configure parameters on the left and click Predict</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- REPORT MODAL -->
+<div class="report-modal-overlay hidden" id="report-overlay" onclick="closeReportModal(event)">
+  <div class="report-modal" id="report-modal">
+    <div id="report-content"></div>
+    <div class="modal-actions">
+      <div style="font-size:12px;color:var(--muted)">Preview your full report · Charts rendered inline</div>
+      <div style="display:flex;gap:10px">
+        <button class="modal-close-btn" onclick="closeReportModalDirect()">✕ &nbsp;Close</button>
+        <button class="modal-print-btn" onclick="window.print()">
+          <span style="font-size:16px">🖨</span> Save as PDF
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════
+let lastPred = null;
+let lastParams = null;
+let lastMode = 'manual';
+let lastCSVResults = null;
+let chartInstances = {};
+let reportChartInstances = {};
+
+// ════════════════════════════════════════════════════════
+// MODEL
+// ════════════════════════════════════════════════════════
+const MODEL = {
+  baseline:0.030,
+  clockW:{2:0.185,5:0.058,20:0.008},
+  utilW:{0.70:-0.012,0.75:-0.004,0.80:0.008,0.85:0.020,0.90:0.038},
+  meshAdj: pm=>pm>=6?-0.010:pm<=2?0.018:0.002,
+  macroAdj:m=>m===1?0.008:m===2?0.002:-0.005,
+  varAdj:  v=>v==='b'?0.012:0,
+  filAdj:  f=>f===1?-0.003:0.003,
+  plcAdj:  p=>({1:0.004,2:0.001,3:-0.002}[p]||0),
+};
+
+function snapNearest(v,arr){return arr.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a)}
+
+function mapParams(clockMhz,utilPct,numMacros,pdnLayers,gateCount,placement,filler){
+  return{
+    clockNs:    snapNearest(Math.round(1000/clockMhz),[2,5,20]),
+    utilization:parseFloat(snapNearest(utilPct/100,[0.70,0.75,0.80,0.85,0.90]).toFixed(2)),
+    macros:     Math.min(3,Math.max(1,Math.round(numMacros/5)+1)),
+    powerMesh:  Math.min(8,Math.max(1,Math.round(pdnLayers*0.8))),
+    variant:    gateCount<=100?'a':'b',
+    macroPlace: ({edge:1,center:2,distributed:3})[placement.toLowerCase()]||1,
+    filler:     filler.toLowerCase()==='routing'?1:0,
+  };
+}
+
+function predict(p){
+  const v=MODEL.baseline+(MODEL.clockW[p.clockNs]??0.030)+(MODEL.utilW[p.utilization]??0)
+    +MODEL.meshAdj(p.powerMesh)+MODEL.macroAdj(p.macros)+MODEL.varAdj(p.variant)
+    +MODEL.filAdj(p.filler)+MODEL.plcAdj(p.macroPlace);
+  return Math.max(0.006,Math.min(0.85,v));
+}
+
+function getLevel(v){return v<0.05?'LOW':v<0.15?'MODERATE':'HIGH'}
+
+// ════════════════════════════════════════════════════════
+// MODULES
+// ════════════════════════════════════════════════════════
+const MODULES=[
+  {name:'ALU',            bias:0.15,cSens:1.4, uSens:1.0 },
+  {name:'Register File',  bias:0.10,cSens:1.0, uSens:1.25},
+  {name:'Decoder',        bias:0.05,cSens:1.35,uSens:1.0 },
+  {name:'Load Store Unit',bias:0.08,cSens:1.1, uSens:1.1 },
+  {name:'Control Unit',   bias:0.04,cSens:0.9, uSens:1.0 },
+  {name:'CSR Unit',       bias:0.02,cSens:0.7, uSens:1.0 },
+  {name:'Mult / Div',     bias:0.20,cSens:1.5, uSens:1.0 },
+  {name:'Pipeline Regs',  bias:0.07,cSens:1.2, uSens:1.0 },
+];
+
+const RECS={
+  'ALU':           {src:'combinational switching',high:['Apply operand isolation — gate ALU inputs when result is unused','Use carry-save adder to reduce glitch power','Consider multi-Vt cells on non-critical ALU paths'],mod:['Ensure idle during memory-only operations','Check toggling on unused ALU opcodes']},
+  'Register File': {src:'frequent read/write port switching',high:['Bank-wise clock gating on register file arrays','Consider latch-based register file for lower dynamic power','Reduce port count if IPC allows'],mod:['Gate unnecessary write-back from stalled instructions','Use write-enable gating']},
+  'Decoder':       {src:'instruction fetch switching',high:['Clock gate decoder during pipeline stalls','Pre-decode logic to suppress decode on NOPs','Improve branch prediction to reduce wasteful fetches'],mod:['Check pipeline stall frequency']},
+  'Load Store Unit':{src:'memory address + data bus switching',high:['Apply Data Bus Inversion (DBI) encoding','Use write buffers to coalesce transactions','Gate LSU clock during instruction-only phases'],mod:['Review memory access patterns','Consider prefetch buffer']},
+  'Control Unit':  {src:'FSM state transitions',high:['Use one-hot FSM encoding to reduce glitch power','Clock gate control signals during stall cycles','Review exception/interrupt handling logic'],mod:['Check for redundant toggles during pipeline flushes']},
+  'CSR Unit':      {src:'infrequent wide register access',high:['Fully clock-gate CSR logic — accesses are rare','Move CSR to a lower-frequency domain'],mod:['Ensure idle-gated during non-privileged execution']},
+  'Mult / Div':    {src:'iterative logic with high switching depth',high:['Apply Booth encoding to reduce partial products','Early termination in divider','Gate clock when no MUL/DIV executing','Consider shared multiply-accumulate unit'],mod:['Ensure fully clock-gated between operations']},
+  'Pipeline Regs': {src:'pipeline registers toggle every cycle',high:['Clock gate regs during stall cycles','Bubble squashing — insert NOPs instead of garbage data','Latch-based pipeline registers (~30% power saving)'],mod:['Audit flush logic — unnecessary flushes increase toggling']},
+};
+
+function computeModules(pred,p){
+  const cF=p.clockNs===2?1.4:p.clockNs===5?1.0:0.55;
+  const uF=p.utilization>=0.85?1.2:1.0;
+  const vF=p.variant==='b'?1.3:1.0;
+  return MODULES.map(m=>{
+    let v=pred*m.bias*m.cSens*cF*m.uSens*uF;
+    if(m.name==='Mult / Div')v*=vF;
+    const noise=(Math.sin(m.name.charCodeAt(0)*31+pred*100)*0.5+0.5)*0.012;
+    return{...m,val:v+noise};
+  });
+}
+
+function pct(arr,p){const s=[...arr].sort((a,b)=>a-b);return s[Math.floor((p/100)*(s.length-1))]}
+function modSev(v,all){return v>=pct(all,70)?'high':v>=pct(all,40)?'moderate':'low'}
+
+// ════════════════════════════════════════════════════════
+// UI HELPERS
+// ════════════════════════════════════════════════════════
+function syncSlider(id,dispId){document.getElementById(dispId).textContent=document.getElementById(id).value}
+
+function switchMode(m){
+  ['manual','csv'].forEach(x=>{
+    document.getElementById(`btn-${x}`).classList.toggle('active',x===m);
+    document.getElementById(`${x}-panel`).classList.toggle('hidden',x!==m);
+  });
+  resetResults();
+}
+
+function switchToManualFromError(){
+  switchMode('manual');
+  window.scrollTo({top:0,behavior:'smooth'});
+  toast('Switched to Manual Input — fill in your parameters below','success');
+}
+
+function resetResults(){
+  destroyCharts();
+  lastPred=null; lastParams=null; lastCSVResults=null;
+  document.getElementById('dl-report-btn').classList.remove('active');
+  document.getElementById('results-panel').innerHTML=`
+    <div class="empty-state">
+      <div class="empty-icon">🔌</div>
+      <div class="empty-text">No Prediction Yet</div>
+      <div class="empty-sub">Configure parameters and click Predict</div>
+    </div>`;
+}
+
+function toast(msg,type='success'){
+  const el=document.getElementById('toast');
+  const icon=type==='success'?'✓':type==='error'?'✕':'ℹ';
+  el.innerHTML=`<span>${icon}</span> ${msg}`;
+  el.className=`toast ${type} show`;
+  setTimeout(()=>el.classList.remove('show'),3200);
+}
+
+function destroyCharts(){
+  Object.values(chartInstances).forEach(c=>{try{c.destroy()}catch(e){}});
+  chartInstances={};
+}
+
+function destroyReportCharts(){
+  Object.values(reportChartInstances).forEach(c=>{try{c.destroy()}catch(e){}});
+  reportChartInstances={};
+}
+
+// ════════════════════════════════════════════════════════
+// CHARTS
+// ════════════════════════════════════════════════════════
+function makeBarChart(ctx,mods,instanceKey,store){
+  const sorted=[...mods].sort((a,b)=>b.val-a.val);
+  const allVals=mods.map(m=>m.val);
+  const colors=sorted.map(m=>{const s=modSev(m.val,allVals);return s==='high'?'rgba(225,29,72,.75)':s==='moderate'?'rgba(217,119,6,.75)':'rgba(13,148,136,.75)'});
+  if(store[instanceKey])store[instanceKey].destroy();
+  store[instanceKey]=new Chart(ctx,{
+    type:'bar',
+    data:{labels:sorted.map(m=>m.name),datasets:[{label:'Mean IR Drop',data:sorted.map(m=>m.val),backgroundColor:colors,borderRadius:5,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`IR Drop: ${c.raw.toFixed(4)}`}}},scales:{y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:10},color:'#94a3b8'}},x:{grid:{display:false},ticks:{font:{size:10},color:'#64748b',maxRotation:30}}}}
+  });
+}
+
+function makeGaugeChart(ctx,pred,instanceKey,store){
+  const level=getLevel(pred);
+  const color=level==='LOW'?'#059669':level==='MODERATE'?'#d97706':'#e11d48';
+  const ratio=Math.min(pred/0.40,1);
+  if(store[instanceKey])store[instanceKey].destroy();
+  store[instanceKey]=new Chart(ctx,{
+    type:'doughnut',
+    data:{datasets:[{data:[ratio,1-ratio],backgroundColor:[color,'rgba(0,0,0,0.06)'],borderWidth:0,circumference:180,rotation:270}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'72%'}
+  });
+}
+
+function makeCSVBarChart(ctx,results,instanceKey,store){
+  const colors=results.map(r=>r.level==='LOW'?'rgba(5,150,105,.7)':r.level==='MODERATE'?'rgba(217,119,6,.7)':'rgba(225,29,72,.7)');
+  if(store[instanceKey])store[instanceKey].destroy();
+  store[instanceKey]=new Chart(ctx,{
+    type:'bar',
+    data:{labels:results.map((_,i)=>`D${i+1}`),datasets:[{label:'Predicted IR Drop',data:results.map(r=>r.pred),backgroundColor:colors,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw.toFixed(4)} (${results[c.dataIndex].level})`}}},scales:{y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:10},color:'#94a3b8'},afterDataLimits:a=>{a.max=Math.max(a.max,0.20)}},x:{grid:{display:false},ticks:{font:{size:10},color:'#64748b'}}}}
+  });
+}
+
+function makePieChart(ctx,results,instanceKey,store){
+  const low=results.filter(r=>r.level==='LOW').length;
+  const mod=results.filter(r=>r.level==='MODERATE').length;
+  const high=results.filter(r=>r.level==='HIGH').length;
+  if(store[instanceKey])store[instanceKey].destroy();
+  store[instanceKey]=new Chart(ctx,{
+    type:'doughnut',
+    data:{labels:['LOW','MODERATE','HIGH'],datasets:[{data:[low,mod,high],backgroundColor:['rgba(5,150,105,.7)','rgba(217,119,6,.7)','rgba(225,29,72,.7)'],borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12}}}}
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// RENDER SINGLE (main panel)
+// ════════════════════════════════════════════════════════
+const LCOLOR={LOW:'var(--low)',MODERATE:'var(--moderate)',HIGH:'var(--high)'};
+const LICON={LOW:'✅',MODERATE:'⚠️',HIGH:'🔴'};
+
+function renderSingle(pred,params){
+  lastPred=pred; lastParams=params; lastMode='manual'; lastCSVResults=null;
+  const level=getLevel(pred), lc=level.toLowerCase();
+  const mods=computeModules(pred,params);
+  const allVals=mods.map(m=>m.val), maxVal=Math.max(...allVals);
+  const barPct=Math.min(100,(pred/0.40)*100).toFixed(1);
+  const lcolor=LCOLOR[level];
+
+  const genRecs=level==='LOW'
+    ?["Design is power-efficient. No major changes needed."]
+    :level==='MODERATE'
+    ?["Consider clock gating on inactive modules.","Review utilization — slight reduction may help.","Optimize power mesh density."]
+    :["Apply aggressive clock gating on idle modules.","Reduce switching activity in datapath.","Use operand isolation on inactive datapaths.","Consider reducing clock frequency if timing allows.","Strengthen power mesh to reduce IR drop."];
+  if(params.clockNs<=2)        genRecs.push("High-frequency design — switching power is dominant.");
+  if(params.utilization>=0.85) genRecs.push("High utilization — dense placement increases power density.");
+
+  const modRowsHTML=[...mods].sort((a,b)=>b.val-a.val).map(m=>{
+    const sev=modSev(m.val,allVals), p=maxVal>0?(m.val/maxVal*100).toFixed(1):0;
+    const fc=sev==='high'?'var(--rose)':sev==='moderate'?'var(--amber)':'var(--teal)';
+    return`<div class="module-row"><div class="mod-name">${m.name}</div><div class="mod-bar"><div class="mod-bar-fill" style="width:${p}%;background:${fc}"></div></div><div class="mod-val">${m.val.toFixed(4)}</div><div class="mod-tag ${sev}">${sev.toUpperCase()}</div></div>`;
+  }).join('');
+
+  const top3=[...mods].sort((a,b)=>b.val-a.val).slice(0,3);
+  const modRecsHTML=top3.map(m=>{
+    const sev=modSev(m.val,allVals), kb=RECS[m.name]; if(!kb)return'';
+    const rs=sev==='high'?kb.high:kb.mod;
+    return`<div class="mod-rec-block"><div class="mod-rec-header">▸ ${m.name} <span class="mod-rec-src">· ${kb.src}</span></div>${rs.map((r,i)=>`<div class="rec-item mod-rec"><span class="rec-num">${String(i+1).padStart(2,'0')}</span><div>${r}</div></div>`).join('')}</div>`;
+  }).join('');
+
+  const chips=[['Clock',`${params.clockNs}ns · ${1000/params.clockNs|0}MHz`],['Util',`${(params.utilization*100).toFixed(0)}%`],['Variant',params.variant.toUpperCase()],['Macros',`Cat. ${params.macros}`],['PDN',`Mesh ${params.powerMesh}/8`],['Filler',params.filler?'Post-Route':'Post-Place']]
+    .map(([k,v])=>`<div class="param-chip"><div class="param-key">${k}</div><div class="param-val">${v}</div></div>`).join('');
+
+  destroyCharts();
+
+  document.getElementById('results-panel').innerHTML=`
+    <div style="animation:fadeUp .35s ease both;background:transparent">
+      <div class="power-card ${lc}-card">
+        <div class="power-label">Predicted IR Drop (Power Proxy)</div>
+        <div class="power-value">${pred.toFixed(4)}</div>
+        <div class="power-unit">Mean IR Drop · Normalised · mV</div>
+        <div><span class="level-badge ${lc}">${LICON[level]} &nbsp; ${level} POWER</span></div>
+        <div class="power-bar-wrap">
+          <div class="power-bar-track"><div class="power-bar-fill" style="width:${barPct}%;background:${lcolor}"></div></div>
+          <div class="power-bar-marks">
+            <span>0.00</span>
+            <span class="${pred<0.05?'active':''}">LOW</span>
+            <span class="${pred>=0.05&&pred<0.15?'active':''}">MOD</span>
+            <span class="${pred>=0.15?'active':''}">HIGH</span>
+            <span>0.40+</span>
+          </div>
+        </div>
+      </div>
+      <div class="params-mini" style="margin-top:12px">${chips}</div>
+    </div>
+
+    <div class="card" style="animation:fadeUp .35s .05s ease both">
+      <div class="card-title" style="color:var(--violet)"><span class="ct-dot" style="background:var(--violet)"></span>Power Level Gauge</div>
+      <div class="chart-wrap" style="height:160px"><canvas id="gauge-chart"></canvas></div>
+      <p style="text-align:center;font-size:12px;color:var(--sub);margin-top:4px">${(pred/0.40*100).toFixed(0)}% of high-power threshold</p>
+    </div>
+
+    <div class="card" style="animation:fadeUp .35s .10s ease both">
+      <div class="card-title" style="color:var(--teal)"><span class="ct-dot" style="background:var(--teal)"></span>Module Power Breakdown</div>
+      <div class="chart-wrap"><canvas id="module-chart"></canvas></div>
+    </div>
+
+    <div class="card" style="animation:fadeUp .35s .13s ease both">
+      <div class="card-title" style="color:var(--teal)"><span class="ct-dot" style="background:var(--teal)"></span>Module Power Bars</div>
+      <div class="modules-list">${modRowsHTML}</div>
+    </div>
+
+    <div class="card" style="animation:fadeUp .35s .17s ease both">
+      <div class="card-title" style="color:var(--amber)"><span class="ct-dot" style="background:var(--amber)"></span>Design-Level Recommendations</div>
+      <div class="recs-list">${genRecs.map((r,i)=>`<div class="rec-item"><span class="rec-num">${String(i+1).padStart(2,'0')}</span><div>${r}</div></div>`).join('')}</div>
+    </div>
+
+    <div class="card" style="animation:fadeUp .35s .21s ease both">
+      <div class="card-title" style="color:var(--violet)"><span class="ct-dot" style="background:var(--violet)"></span>Module-Specific Optimizations</div>
+      ${modRecsHTML}
+    </div>`;
+
+  setTimeout(()=>{
+    makeGaugeChart(document.getElementById('gauge-chart'), pred, 'gauge', chartInstances);
+    makeBarChart(document.getElementById('module-chart'), mods, 'modbar', chartInstances);
+  },100);
+
+  document.getElementById('dl-report-btn').classList.add('active');
+}
+
+// ════════════════════════════════════════════════════════
+// RENDER CSV RESULTS
+// ════════════════════════════════════════════════════════
+function renderCSV(rows){
+  lastCSVResults=rows; lastMode='csv'; lastPred=null; lastParams=null;
+  const low=rows.filter(r=>r.level==='LOW').length;
+  const mod=rows.filter(r=>r.level==='MODERATE').length;
+  const high=rows.filter(r=>r.level==='HIGH').length;
+  const worst=rows.reduce((a,b)=>b.pred>a.pred?b:a);
+  const wi=rows.indexOf(worst)+1;
+
+  const trs=rows.map((r,i)=>{
+    const dot=r.level==='LOW'?'🟢':r.level==='MODERATE'?'🟡':'🔴';
+    return`<tr><td style="color:var(--muted);font-family:'JetBrains Mono',monospace">#${i+1}</td><td>${r.params.clockNs}ns · ${1000/r.params.clockNs|0}MHz</td><td>${(r.params.utilization*100).toFixed(0)}%</td><td style="font-family:'JetBrains Mono',monospace">${r.params.variant.toUpperCase()}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${LCOLOR[r.level]}">${r.pred.toFixed(4)}</td><td>${dot} ${r.level}</td></tr>`;
+  }).join('');
+
+  destroyCharts();
+
+  document.getElementById('results-panel').innerHTML=`
+    <div class="card" style="animation:fadeUp .35s ease both">
+      <div class="card-title" style="color:var(--indigo)"><span class="ct-dot" style="background:var(--indigo)"></span>Batch Results — ${rows.length} Design(s)</div>
+      <div class="summary-counts">
+        <div class="count-card low"><div class="count-num">${low}</div><div class="count-lbl">LOW</div></div>
+        <div class="count-card moderate"><div class="count-num">${mod}</div><div class="count-lbl">MODERATE</div></div>
+        <div class="count-card high"><div class="count-num">${high}</div><div class="count-lbl">HIGH</div></div>
+      </div>
+      <div style="overflow:auto;max-height:280px;border:1px solid var(--border);border-radius:10px">
+        <table class="results-table">
+          <thead><tr><th>#</th><th>Clock</th><th>Util</th><th>Var</th><th>Predicted</th><th>Level</th></tr></thead>
+          <tbody>${trs}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="animation:fadeUp .35s .07s ease both">
+      <div class="card-title" style="color:var(--teal)"><span class="ct-dot" style="background:var(--teal)"></span>Power Comparison — All Designs</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="csv-bar-chart"></canvas></div>
+    </div>
+    <div class="card" style="animation:fadeUp .35s .12s ease both">
+      <div class="card-title" style="color:var(--violet)"><span class="ct-dot" style="background:var(--violet)"></span>Power Level Distribution</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="csv-pie-chart"></canvas></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--indigo);padding:4px 0 0;letter-spacing:.3px">▸ Worst Design #${wi} — Full Module Analysis</div>
+    <div id="worst-detail"></div>`;
+
+  setTimeout(()=>{
+    makeCSVBarChart(document.getElementById('csv-bar-chart'), rows, 'csvbar', chartInstances);
+    makePieChart(document.getElementById('csv-pie-chart'), rows, 'csvpie', chartInstances);
+    const el=document.getElementById('worst-detail');
+    if(el) renderSingleInto(worst.pred, worst.params, el);
+  },120);
+
+  document.getElementById('dl-report-btn').classList.add('active');
+}
+
+function renderSingleInto(pred,params,container){
+  const mods=computeModules(pred,params), allVals=mods.map(m=>m.val), maxVal=Math.max(...allVals);
+  const modRowsHTML=[...mods].sort((a,b)=>b.val-a.val).map(m=>{
+    const sev=modSev(m.val,allVals),p=maxVal>0?(m.val/maxVal*100).toFixed(1):0;
+    const fc=sev==='high'?'var(--rose)':sev==='moderate'?'var(--amber)':'var(--teal)';
+    return`<div class="module-row"><div class="mod-name">${m.name}</div><div class="mod-bar"><div class="mod-bar-fill" style="width:${p}%;background:${fc}"></div></div><div class="mod-val">${m.val.toFixed(4)}</div><div class="mod-tag ${sev}">${sev.toUpperCase()}</div></div>`;
+  }).join('');
+  const top3=[...mods].sort((a,b)=>b.val-a.val).slice(0,3);
+  const modRecsHTML=top3.map(m=>{
+    const sev=modSev(m.val,allVals), kb=RECS[m.name]; if(!kb)return'';
+    const rs=sev==='high'?kb.high:kb.mod;
+    return`<div class="mod-rec-block"><div class="mod-rec-header">▸ ${m.name} <span class="mod-rec-src">· ${kb.src}</span></div>${rs.map((r,i)=>`<div class="rec-item mod-rec"><span class="rec-num">${String(i+1).padStart(2,'0')}</span><div>${r}</div></div>`).join('')}</div>`;
+  }).join('');
+  const cid='worst-mod-chart-'+Date.now();
+  container.innerHTML=`
+    <div class="card" style="animation:fadeUp .35s ease both">
+      <div class="card-title" style="color:var(--teal)"><span class="ct-dot" style="background:var(--teal)"></span>Module Power Chart</div>
+      <div class="chart-wrap"><canvas id="${cid}"></canvas></div>
+    </div>
+    <div class="card" style="animation:fadeUp .35s .07s ease both">
+      <div class="card-title" style="color:var(--teal)"><span class="ct-dot" style="background:var(--teal)"></span>Module Power Bars</div>
+      <div class="modules-list">${modRowsHTML}</div>
+    </div>
+    <div class="card" style="animation:fadeUp .35s .12s ease both">
+      <div class="card-title" style="color:var(--violet)"><span class="ct-dot" style="background:var(--violet)"></span>Module-Specific Optimizations</div>
+      ${modRecsHTML}
+    </div>`;
+  setTimeout(()=>makeBarChart(document.getElementById(cid),mods,cid,chartInstances),150);
+}
+
+// ════════════════════════════════════════════════════════
+// REPORT MODAL — generate full HTML report with charts
+// ════════════════════════════════════════════════════════
+function openReportModal(){
+  if(!lastPred && !lastCSVResults){toast('Run a prediction first','error');return}
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  const timeStr=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const tsShort=now.toISOString().slice(0,19).replace('T',' ');
+
+  destroyReportCharts();
+  const rc=document.getElementById('report-content');
+
+  if(lastMode==='manual' && lastParams){
+    const p=lastParams, pred=lastPred, level=getLevel(pred), lc=level.toLowerCase();
+    const mods=computeModules(pred,p), allVals=mods.map(m=>m.val), maxVal=Math.max(...allVals);
+    const genRecs=level==='LOW'
+      ?["Design is power-efficient. No major changes needed."]
+      :level==='MODERATE'
+      ?["Consider clock gating on inactive modules.","Review utilization — slight reduction may help.","Optimize power mesh density."]
+      :["Apply aggressive clock gating on idle modules.","Reduce switching activity in datapath.","Use operand isolation on inactive datapaths.","Consider reducing clock frequency if timing allows.","Strengthen power mesh to reduce IR drop."];
+    if(p.clockNs<=2) genRecs.push("High-frequency design — switching power is dominant.");
+    if(p.utilization>=0.85) genRecs.push("High utilization — dense placement increases power density.");
+
+    const modRowsHTML=[...mods].sort((a,b)=>b.val-a.val).map(m=>{
+      const sev=modSev(m.val,allVals), pct=maxVal>0?(m.val/maxVal*100).toFixed(1):0;
+      const fc=sev==='high'?'#e11d48':sev==='moderate'?'#d97706':'#0d9488';
+      return`<div class="report-module-row"><div class="rmr-name">${m.name}</div><div class="rmr-bar"><div class="rmr-fill" style="width:${pct}%;background:${fc};height:6px;border-radius:99px"></div></div><div class="rmr-val">${m.val.toFixed(4)}</div><div class="rmr-tag ${sev}">${sev.toUpperCase()}</div></div>`;
+    }).join('');
+
+    const top3=[...mods].sort((a,b)=>b.val-a.val).slice(0,3);
+    const modRecsHTML=top3.map(m=>{
+      const sev=modSev(m.val,allVals), kb=RECS[m.name]; if(!kb)return'';
+      const rs=sev==='high'?kb.high:kb.mod;
+      return`<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:8px">▸ ${m.name} <span style="color:#94a3b8;font-size:11px;font-weight:400">· ${kb.src}</span></div>${rs.map((r,i)=>`<div class="report-rec-item"><span class="report-rec-num">${String(i+1).padStart(2,'0')}</span><div>${r}</div></div>`).join('')}</div>`;
+    }).join('');
+
+    const gaugeId='rg-gauge-'+Date.now();
+    const barId='rg-bar-'+Date.now();
+
+    rc.innerHTML=`
+      <div class="report-doc">
+        <div class="report-header-band">
+          <div class="rh-logo" style="position:relative;z-index:1">
+            <div class="rh-logo-icon">⚡</div>
+            VLSI Power Dissipation Report
+          </div>
+          <div class="rh-meta-row">
+            <div class="rh-meta-left">
+              Design: RISCY-${p.variant.toUpperCase()} &nbsp;·&nbsp; Clock: ${p.clockNs}ns (${1000/p.clockNs|0}MHz)<br>
+              Utilization: ${(p.utilization*100).toFixed(0)}% &nbsp;·&nbsp; PDN Mesh: ${p.powerMesh}/8 &nbsp;·&nbsp; Macros: Cat.${p.macros}<br>
+              Variant: ${p.variant==='a'?'Variant A (≤100K gates)':'Variant B (>100K gates)'} &nbsp;·&nbsp; Filler: ${p.filler?'Post-Route':'Post-Place'}
+            </div>
+            <div class="rh-stamp">
+              <div>📅 ${dateStr}</div>
+              <div>🕐 ${timeStr}</div>
+              <div>🤖 Random Forest · R²=0.70</div>
+              <div>📦 CircuitNet-N28</div>
+            </div>
+          </div>
+          <span class="rh-badge">VLSI Power Predictor v1.0 &nbsp;·&nbsp; Single Design Analysis</span>
+        </div>
+
+        <div class="report-body">
+
+          <!-- POWER HERO -->
+          <div class="report-section">
+            <div class="report-section-title">📊 Prediction Result</div>
+            <div class="report-power-hero">
+              <div>
+                <div class="rph-label">Predicted IR Drop (Power Proxy)</div>
+                <div class="rph-value ${lc}">${pred.toFixed(4)}</div>
+                <div style="font-size:11px;color:#94a3b8;font-family:'JetBrains Mono',monospace;margin-top:4px">Mean IR Drop · Normalised · mV</div>
+                <div class="rph-level ${lc}">${LICON[level]} &nbsp; ${level} POWER</div>
+              </div>
+              <div style="flex:1">
+                <div style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:8px;letter-spacing:.5px;text-transform:uppercase">Power Scale</div>
+                <div style="background:#f1f5f9;border-radius:99px;height:10px;overflow:hidden">
+                  <div style="width:${Math.min(100,(pred/0.40)*100).toFixed(1)}%;height:100%;border-radius:99px;background:${level==='LOW'?'#059669':level==='MODERATE'?'#d97706':'#e11d48'}"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;margin-top:5px"><span>0.00</span><span>LOW</span><span>MOD</span><span>HIGH</span><span>0.40+</span></div>
+                <div style="margin-top:12px;font-size:13px;color:#64748b">${(pred/0.40*100).toFixed(0)}% of high-power threshold</div>
+              </div>
+            </div>
+
+            <!-- PARAM CHIPS -->
+            <div class="report-params-grid">
+              ${[['Clock',`${p.clockNs}ns · ${1000/p.clockNs|0}MHz`],['Utilization',`${(p.utilization*100).toFixed(0)}%`],['Variant',p.variant.toUpperCase()],['Macros',`Category ${p.macros}`],['PDN Mesh',`${p.powerMesh}/8`],['Filler',p.filler?'Post-Route':'Post-Place']].map(([k,v])=>`<div class="rp-chip"><div class="rp-chip-key">${k}</div><div class="rp-chip-val">${v}</div></div>`).join('')}
+            </div>
+          </div>
+
+          <!-- CHARTS -->
+          <div class="report-section">
+            <div class="report-section-title">📈 Visual Analysis</div>
+            <div class="report-chart-grid">
+              <div class="report-chart-box">
+                <div class="rc-label">Power Level Gauge</div>
+                <canvas id="${gaugeId}" style="width:100%;height:180px"></canvas>
+                <div style="text-align:center;font-size:11px;color:#94a3b8;margin-top:-10px">${(pred/0.40*100).toFixed(0)}% of threshold</div>
+              </div>
+              <div class="report-chart-box">
+                <div class="rc-label">Module Power Breakdown</div>
+                <canvas id="${barId}" style="width:100%;height:180px"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- MODULE BARS -->
+          <div class="report-section">
+            <div class="report-section-title">🧩 Module Power Breakdown</div>
+            <div style="background:#f8faff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px">
+              ${modRowsHTML}
+            </div>
+          </div>
+
+          <!-- RECS -->
+          <div class="report-section">
+            <div class="report-section-title">💡 Design-Level Recommendations</div>
+            ${genRecs.map((r,i)=>`<div class="report-rec-item"><span class="report-rec-num">${String(i+1).padStart(2,'0')}</span><div>${r}</div></div>`).join('')}
+          </div>
+
+          <div class="report-section">
+            <div class="report-section-title">🔧 Module-Specific Optimizations</div>
+            ${modRecsHTML}
+          </div>
+
+        </div>
+
+        <div class="report-footer">
+          <div class="rf-note">
+            This report was generated automatically by VLSI Power Predictor using a Random Forest model trained on CircuitNet-N28 dataset (R²=0.70). 
+            Predictions are estimates for early-stage design guidance — verify with full power analysis before sign-off.
+          </div>
+          <div>
+            <div class="rf-logo">⚡ VLSI Power Predictor</div>
+            <div style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;margin-top:3px">${tsShort}</div>
+          </div>
+        </div>
+      </div>`;
+
+    // draw charts inside modal
+    setTimeout(()=>{
+      makeGaugeChart(document.getElementById(gaugeId), pred, gaugeId, reportChartInstances);
+      makeBarChart(document.getElementById(barId), mods, barId, reportChartInstances);
+    },150);
+
+  } else if(lastCSVResults){
+    // CSV report
+    const rows=lastCSVResults;
+    const low=rows.filter(r=>r.level==='LOW').length;
+    const mod=rows.filter(r=>r.level==='MODERATE').length;
+    const high=rows.filter(r=>r.level==='HIGH').length;
+    const worst=rows.reduce((a,b)=>b.pred>a.pred?b:a);
+    const avgPred=(rows.reduce((s,r)=>s+r.pred,0)/rows.length);
+    const barId='rg-csvbar-'+Date.now();
+    const pieId='rg-pie-'+Date.now();
+    const wMods=computeModules(worst.pred,worst.params);
+    const wAllVals=wMods.map(m=>m.val), wMaxVal=Math.max(...wAllVals);
+    const wBarId='rg-wbar-'+Date.now();
+
+    const wModRowsHTML=[...wMods].sort((a,b)=>b.val-a.val).map(m=>{
+      const sev=modSev(m.val,wAllVals), pt=wMaxVal>0?(m.val/wMaxVal*100).toFixed(1):0;
+      const fc=sev==='high'?'#e11d48':sev==='moderate'?'#d97706':'#0d9488';
+      return`<div class="report-module-row"><div class="rmr-name">${m.name}</div><div class="rmr-bar"><div class="rmr-fill" style="width:${pt}%;background:${fc};height:6px;border-radius:99px"></div></div><div class="rmr-val">${m.val.toFixed(4)}</div><div class="rmr-tag ${sev}">${sev.toUpperCase()}</div></div>`;
+    }).join('');
+
+    const trs=rows.map((r,i)=>{
+      const dot=r.level==='LOW'?'🟢':r.level==='MODERATE'?'🟡':'🔴';
+      const col=r.level==='LOW'?'#059669':r.level==='MODERATE'?'#d97706':'#e11d48';
+      return`<tr><td style="color:#94a3b8;font-family:'JetBrains Mono',monospace">#${i+1}</td><td>${r.params.clockNs}ns·${1000/r.params.clockNs|0}MHz</td><td>${(r.params.utilization*100).toFixed(0)}%</td><td>${r.params.variant.toUpperCase()}</td><td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${col}">${r.pred.toFixed(4)}</td><td>${dot} ${r.level}</td></tr>`;
+    }).join('');
+
+    rc.innerHTML=`
+      <div class="report-doc">
+        <div class="report-header-band">
+          <div class="rh-logo" style="position:relative;z-index:1">
+            <div class="rh-logo-icon">⚡</div>
+            VLSI Power Dissipation Report
+          </div>
+          <div class="rh-meta-row">
+            <div class="rh-meta-left">
+              Mode: CSV Batch Analysis &nbsp;·&nbsp; Designs Analysed: ${rows.length}<br>
+              LOW: ${low} &nbsp;·&nbsp; MODERATE: ${mod} &nbsp;·&nbsp; HIGH: ${high}<br>
+              Average IR Drop: ${avgPred.toFixed(4)} &nbsp;·&nbsp; Worst: ${Math.max(...rows.map(r=>r.pred)).toFixed(4)}
+            </div>
+            <div class="rh-stamp">
+              <div>📅 ${dateStr}</div>
+              <div>🕐 ${timeStr}</div>
+              <div>🤖 Random Forest · R²=0.70</div>
+              <div>📦 CircuitNet-N28</div>
+            </div>
+          </div>
+          <span class="rh-badge">VLSI Power Predictor v1.0 &nbsp;·&nbsp; Batch Design Analysis</span>
+        </div>
+
+        <div class="report-body">
+          <div class="report-section">
+            <div class="report-section-title">📊 Batch Summary</div>
+            <div class="report-csv-summary">
+              <div class="rcs-card low"><div class="rcs-num">${low}</div><div class="rcs-lbl">LOW POWER</div></div>
+              <div class="rcs-card moderate"><div class="rcs-num">${mod}</div><div class="rcs-lbl">MODERATE</div></div>
+              <div class="rcs-card high"><div class="rcs-num">${high}</div><div class="rcs-lbl">HIGH POWER</div></div>
+            </div>
+          </div>
+
+          <div class="report-section">
+            <div class="report-section-title">📈 Visual Comparison</div>
+            <div class="report-chart-grid">
+              <div class="report-chart-box">
+                <div class="rc-label">Power Level Distribution</div>
+                <canvas id="${pieId}" style="width:100%;height:190px"></canvas>
+              </div>
+              <div class="report-chart-box">
+                <div class="rc-label">All Designs — IR Drop</div>
+                <canvas id="${barId}" style="width:100%;height:190px"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="report-section">
+            <div class="report-section-title">📋 All Designs</div>
+            <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+              <table class="report-table">
+                <thead><tr><th>#</th><th>Clock</th><th>Util</th><th>Var</th><th>Predicted</th><th>Level</th></tr></thead>
+                <tbody>${trs}</tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="report-section">
+            <div class="report-section-title">🔴 Worst Design Module Breakdown</div>
+            <div style="background:#fff1f2;border:1.5px solid #fda4af;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px">
+              Worst design: IR Drop <strong style="color:#e11d48">${worst.pred.toFixed(4)}</strong> · Clock ${worst.params.clockNs}ns · Util ${(worst.params.utilization*100).toFixed(0)}% · Variant ${worst.params.variant.toUpperCase()}
+            </div>
+            <div style="background:#f8faff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin-bottom:16px">
+              ${wModRowsHTML}
+            </div>
+            <div class="report-chart-box" style="height:220px">
+              <div class="rc-label">Worst Design — Module Power Chart</div>
+              <canvas id="${wBarId}" style="width:100%;height:180px"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="report-footer">
+          <div class="rf-note">
+            This report was generated automatically by VLSI Power Predictor using a Random Forest model trained on CircuitNet-N28 dataset (R²=0.70).
+            Predictions are estimates for early-stage design guidance — verify with full power analysis before sign-off.
+          </div>
+          <div>
+            <div class="rf-logo">⚡ VLSI Power Predictor</div>
+            <div style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;margin-top:3px">${tsShort}</div>
+          </div>
+        </div>
+      </div>`;
+
+    setTimeout(()=>{
+      makePieChart(document.getElementById(pieId), rows, pieId, reportChartInstances);
+      makeCSVBarChart(document.getElementById(barId), rows, barId, reportChartInstances);
+      makeBarChart(document.getElementById(wBarId), wMods, wBarId, reportChartInstances);
+    },150);
+  }
+
+  document.getElementById('report-overlay').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+  toast('Report ready — click Save as PDF to download','success');
+}
+
+function closeReportModal(e){
+  if(e.target===document.getElementById('report-overlay'))closeReportModalDirect();
+}
+
+function closeReportModalDirect(){
+  document.getElementById('report-overlay').classList.add('hidden');
+  document.body.style.overflow='';
+  destroyReportCharts();
+}
+
+// ════════════════════════════════════════════════════════
+// CSV ERROR PANEL
+// ════════════════════════════════════════════════════════
+const COL_SPEC=[
+  {col:'clock_mhz',          type:'Number',  allowed:'Any number in range',         range:'1–1000',    example:'500'},
+  {col:'utilization_pct',    type:'Number',  allowed:'Percentage value',            range:'50–95',     example:'85'},
+  {col:'num_macros',         type:'Integer', allowed:'Whole number',                range:'0–20',      example:'4'},
+  {col:'pdn_layers',         type:'Integer', allowed:'Whole number',                range:'1–10',      example:'4'},
+  {col:'gate_count_k',       type:'Integer', allowed:'Thousands of gates',          range:'1–500',     example:'50'},
+  {col:'placement_strategy', type:'Text',    allowed:'edge / center / distributed', range:'—',         example:'edge'},
+  {col:'filler_stage',       type:'Text',    allowed:'placement / routing',         range:'—',         example:'routing'},
+];
+
+function buildCSVErrorPanel(errorType,errorMsg,rowErrors=[]){
+  const colTableHTML=COL_SPEC.map(c=>`<tr><td><span class="col-name">${c.col}</span></td><td>${c.type}</td><td style="color:var(--sub)">${c.allowed}</td><td class="col-example">${c.example}</td></tr>`).join('');
+  const rowErrHTML=rowErrors.length?`<div class="row-errors"><div class="row-errors-title">❌ Specific Errors (${rowErrors.length})</div>${rowErrors.slice(0,15).map(e=>`<div class="row-err-item"><span class="row-err-badge">${e.row}</span><div>${e.msg}</div></div>`).join('')}${rowErrors.length>15?`<div style="font-size:12px;color:var(--muted);padding:8px 0">... and ${rowErrors.length-15} more</div>`:''}</div>`:'';
+
+  return`<div class="csv-error-panel">
+    <div class="csv-error-header">
+      <div class="csv-error-icon">⚠️</div>
+      <div>
+        <div class="csv-error-title">${errorType}</div>
+        <div class="csv-error-subtitle">${errorMsg}</div>
+      </div>
+    </div>
+
+    <!-- colourful manual entry redirect -->
+    <div style="padding:16px 18px;background:linear-gradient(135deg,#f8faff,#fdf4ff);border-bottom:1px solid #e0e7ff">
+      <div class="manual-redirect-banner">
+        <div class="manual-redirect-text">
+          <strong>🖊 Prefer manual entry?</strong><br>
+          Skip CSV entirely — enter your circuit parameters through the interactive form. No file needed, instant results.
+        </div>
+        <button class="switch-manual-btn" onclick="switchToManualFromError()">
+          ⊞ &nbsp;Switch to Manual Entry
+        </button>
+      </div>
+    </div>
+
+    <div class="csv-guide">
+      <div class="csv-guide-title">How to fix your CSV — Step by step</div>
+      <div class="guide-step">
+        <div class="step-num">1</div>
+        <div>
+          <div class="step-title">Check your file is a valid .csv</div>
+          <div class="step-desc">Open in Excel or Google Sheets and re-export as CSV UTF-8. Only .csv is accepted — not .xlsx.</div>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="step-num">2</div>
+        <div>
+          <div class="step-title">Row 1 must be the exact header row</div>
+          <div class="step-desc">Copy this header into Row 1:</div>
+          <div style="margin-top:8px;background:var(--bg);padding:8px 12px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--violet);word-break:break-all">clock_mhz, utilization_pct, num_macros, pdn_layers, gate_count_k, placement_strategy, filler_stage</div>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="step-num">3</div>
+        <div>
+          <div class="step-title">Each column must have the right values</div>
+          <table class="col-table">
+            <thead><tr><th>Column</th><th>Type</th><th>Allowed Values</th><th>Example</th></tr></thead>
+            <tbody>${colTableHTML}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="step-num">4</div>
+        <div>
+          <div class="step-title">Use our template — easiest fix</div>
+          <div class="step-desc">Download the template, replace the sample values, and re-upload.</div>
+          <div style="margin-top:8px">
+            <button onclick="dlTemplate(event)" style="background:var(--indigo);color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">⬇ Download Template CSV</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    ${rowErrHTML}
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════
+// CSV PARSING
+// ════════════════════════════════════════════════════════
+const REQ_COLS=['clock_mhz','utilization_pct','num_macros','pdn_layers','gate_count_k','placement_strategy','filler_stage'];
+let csvData=[];
+
+function parseCSV(text){
+  const lines=text.trim().split('\n').filter(l=>l.trim());
+  if(lines.length<2)return{fatalError:'File has fewer than 2 rows — needs a header row and at least one data row.'};
+  const sep=lines[0].includes('\t')?'\t':',';
+  const hdrs=lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/\s+/g,'_'));
+  const missing=REQ_COLS.filter(c=>!hdrs.includes(c));
+  if(missing.length)return{fatalError:`Your CSV is missing ${missing.length} required column(s): <strong>${missing.join(', ')}</strong>.`,colError:true};
+  const rows=[],rowErrors=[];
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim())continue;
+    const vals=lines[i].split(sep).map(v=>v.trim());
+    const row=Object.fromEntries(hdrs.map((h,j)=>[h,vals[j]??'']));
+    const re=[];
+    const cm=parseFloat(row.clock_mhz),up=parseFloat(row.utilization_pct),
+          nm=parseInt(row.num_macros),pl=parseInt(row.pdn_layers),
+          gc=parseInt(row.gate_count_k),
+          ps=(row.placement_strategy||'').trim().toLowerCase(),
+          fs=(row.filler_stage||'').trim().toLowerCase();
+    if(isNaN(cm)||cm<1||cm>1000)      re.push(`clock_mhz="${row.clock_mhz}" — must be a number 1–1000`);
+    if(isNaN(up)||up<50||up>95)       re.push(`utilization_pct="${row.utilization_pct}" — must be 50–95`);
+    if(isNaN(nm)||nm<0||nm>20)        re.push(`num_macros="${row.num_macros}" — must be whole number 0–20`);
+    if(isNaN(pl)||pl<1||pl>10)        re.push(`pdn_layers="${row.pdn_layers}" — must be whole number 1–10`);
+    if(isNaN(gc)||gc<1||gc>500)       re.push(`gate_count_k="${row.gate_count_k}" — must be whole number 1–500`);
+    if(!['edge','center','distributed'].includes(ps)) re.push(`placement_strategy="${row.placement_strategy}" — must be: edge, center, or distributed`);
+    if(!['placement','routing'].includes(fs))          re.push(`filler_stage="${row.filler_stage}" — must be: placement or routing`);
+    if(re.length){re.forEach(msg=>rowErrors.push({row:`Row ${i}`,msg}));continue}
+    rows.push({cm,up,nm,pl,gc,ps,fs});
+  }
+  return{rows,rowErrors};
+}
+
+function showPreview(rows){
+  const th=REQ_COLS.map(h=>`<th>${h}</th>`).join('');
+  const tr=rows.slice(0,8).map(r=>`<tr><td>${r.cm}</td><td>${r.up}</td><td>${r.nm}</td><td>${r.pl}</td><td>${r.gc}</td><td>${r.ps}</td><td>${r.fs}</td></tr>`).join('');
+  const el=document.getElementById('csv-preview');
+  el.innerHTML=`<table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`;
+  el.classList.remove('hidden');
+}
+
+function processFile(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const result=parseCSV(e.target.result);
+    const errZone=document.getElementById('csv-error-zone');
+    const btn=document.getElementById('csv-predict-btn');
+    errZone.classList.add('hidden');
+    document.getElementById('csv-preview').classList.add('hidden');
+    csvData=[]; btn.disabled=true;
+    if(result.fatalError){
+      errZone.innerHTML=buildCSVErrorPanel('Cannot Read Your CSV',result.fatalError,[]);
+      errZone.classList.remove('hidden');
+      toast('CSV has errors — see guide below','error');
+      return;
+    }
+    if(result.rowErrors?.length){
+      errZone.innerHTML=buildCSVErrorPanel(`${result.rowErrors.length} Validation Error(s) Found`,`${result.rowErrors.length} row(s) have invalid values and were skipped. Fix below or switch to manual input.`,result.rowErrors);
+      errZone.classList.remove('hidden');
+    }
+    if(result.rows?.length){
+      csvData=result.rows;
+      showPreview(result.rows);
+      btn.disabled=false;
+      toast(`${result.rows.length} valid design(s) loaded`,'success');
+    } else {
+      toast('No valid rows — see fix guide below','error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function handleFile(e){const f=e.target.files[0]; if(f)processFile(f)}
+
+function runCSVPredict(){
+  if(!csvData.length){toast('No valid data loaded','error');return}
+  const results=csvData.map(r=>{const p=mapParams(r.cm,r.up,r.nm,r.pl,r.gc,r.ps,r.fs);const pred=predict(p);return{pred,params:p,level:getLevel(pred)}});
+  renderCSV(results);
+  toast(`${results.length} prediction(s) complete`,'success');
+}
+
+function onDragOver(e){e.preventDefault();document.getElementById('drop-zone').classList.add('dragging')}
+function onDragLeave(){document.getElementById('drop-zone').classList.remove('dragging')}
+function onDrop(e){
+  e.preventDefault();document.getElementById('drop-zone').classList.remove('dragging');
+  const f=e.dataTransfer.files[0];
+  if(f?.name.endsWith('.csv'))processFile(f);
+  else toast('Please drop a .csv file','error');
+}
+
+function dlTemplate(e){
+  e.stopPropagation();
+  const csv=`clock_mhz,utilization_pct,num_macros,pdn_layers,gate_count_k,placement_strategy,filler_stage\n500,85,4,4,50,edge,routing\n200,75,2,3,30,center,placement\n50,70,8,6,120,distributed,routing\n100,80,5,5,200,edge,routing\n`;
+  const a=document.createElement('a');
+  a.href=`data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+  a.download='vlsi_template.csv';a.click();
+  toast('Template downloaded','success');
+}
+
+function runManualPredict(){
+  const cm=parseFloat(document.getElementById('clock_mhz').value);
+  const up=parseFloat(document.getElementById('util_pct').value);
+  const nm=parseInt(document.getElementById('num_macros').value);
+  const pl=parseInt(document.getElementById('pdn_layers').value);
+  const gc=parseInt(document.getElementById('gate_count').value);
+  const ps=document.getElementById('placement').value;
+  const fs=document.getElementById('filler_stage').value;
+  const errs=[];
+  if(isNaN(cm)||cm<1||cm>1000)  errs.push('Clock: 1–1000 MHz');
+  if(isNaN(up)||up<50||up>95)   errs.push('Utilization: 50–95%');
+  if(isNaN(nm)||nm<0||nm>20)    errs.push('Macros: 0–20');
+  if(isNaN(pl)||pl<1||pl>10)    errs.push('PDN Layers: 1–10');
+  if(isNaN(gc)||gc<1||gc>500)   errs.push('Gate Count: 1–500K');
+  if(errs.length){toast('Fix inputs: '+errs.join(' · '),'error');return}
+  const params=mapParams(cm,up,nm,pl,gc,ps,fs);
+  renderSingle(predict(params),params);
+  toast('Prediction complete','success');
+}
+
+// Print styles for modal content
+const printStyle=document.createElement('style');
+printStyle.textContent=`
+@media print {
+  body > *:not(.report-modal-overlay) { display:none!important }
+  body::before { display:none }
+  .report-modal-overlay { position:static!important;background:none!important;backdrop-filter:none!important;padding:0!important;display:block!important }
+  .report-modal { box-shadow:none!important;border-radius:0!important;max-height:none!important;overflow:visible!important }
+  .modal-actions { display:none!important }
+  .report-header-band { border-radius:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact }
+  canvas { max-width:100%!important }
+  * { -webkit-print-color-adjust:exact!important;print-color-adjust:exact!important }
+}`;
+document.head.appendChild(printStyle);
+</script>
+</body>
+</html>
