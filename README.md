@@ -141,4 +141,4 @@ Higher frequency ⇒ higher power consumption
 
 
 ## Website link:
-https://chippowerpredicter.netlify.app/
+https://circuitmindai.netlify.app/ 
