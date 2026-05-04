@@ -2,7 +2,6 @@
 
 An AI-powered system to predict power dissipation in digital circuits at an early design stage—without running expensive EDA simulations.
 
----
 
 ## 🚀 Overview
 
