@@ -3,13 +3,14 @@
 An AI-powered system to predict power dissipation in digital circuits at an early design stage—without running expensive EDA simulations.
 
 
+
 ## 🚀 Overview
 
 Power estimation is a critical challenge in VLSI design. Traditional methods rely on tools like Synopsys or Cadence, which are slow and applied late in the design flow.
 
 This project uses Machine Learning to predict power dissipation from design parameters early in the process, enabling faster decisions and optimization.
 
----
+
 
 ## 📊 Dataset
 
@@ -24,7 +25,7 @@ This project uses Machine Learning to predict power dissipation from design para
   * Placement strategy
   * IR drop map (used as power proxy)
 
----
+
 
 ## 🤖 Model
 
@@ -32,7 +33,7 @@ This project uses Machine Learning to predict power dissipation from design para
 * R² Score: ~0.70
 * Predicts IR drop (proxy for power dissipation)
 
----
+
 
 ## 🖥️ Features
 
@@ -42,7 +43,7 @@ This project uses Machine Learning to predict power dissipation from design para
 * Get module-specific optimization suggestions
 * Batch prediction using CSV upload
 
----
+
 
 ## 🧩 User Interface
 
@@ -76,7 +77,7 @@ This project uses Machine Learning to predict power dissipation from design para
 
 * Download results as a **PDF report**
 
----
+
 
 ## 🛠️ How to Use
 
@@ -114,7 +115,7 @@ http://localhost:5000
 * Click **Predict**
 * View results and download report
 
----
+
 
 ## 📈 Key Insight
 
@@ -124,14 +125,14 @@ P = αCV²f
 
 Higher frequency ⇒ higher power consumption
 
----
+
 
 ## ⚠️ Limitations
 
 * Uses IR drop as proxy (not direct power data)
 * Limited to 28nm dataset
 
----
+
 
 ## 📚 Reference
 
