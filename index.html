@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VLSI Power Predictor</title>
+<title>CircuitMind AI</title>
 <link rel="icon" type="image/png" href="Logo.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -96,7 +96,9 @@ html.dark .rmr-bar { background:#1e2130 }
 html.dark .rmr-tag.high { background:#3f0d1a;color:#fb7185 }
 html.dark .rmr-tag.moderate { background:#2d1800;color:#fbbf24 }
 html.dark .rmr-tag.low { background:#052e16;color:#4ade80 }
-html.dark .report-rec-item { background:#0f1117 }
+html.dark .report-rec-item { background:#0f1117; border-left-color:#f59e0b }
+html.dark .report-rec-num { color:#f59e0b }
+html.dark .report-rec-item div { color:#e2e8f0 }
 html.dark .report-footer { background:linear-gradient(135deg,#0f1117,#1a1020);border-top-color:var(--border) }
 html.dark .modal-actions { background:#1a1d27;border-top-color:var(--border) }
 html.dark .modal-close-btn { background:var(--bg);border-color:var(--border2);color:var(--text) }
@@ -514,7 +516,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;hei
   <div class="logo">
     <img src="Logo.png" alt="Logo" style="width:38px;height:38px;border-radius:10px;object-fit:contain;">
     <div class="logo-text">
-      <h1>VLSI Power Predictor</h1>
+      <h1>CircuitMind AI</h1>
       <p>CircuitNet-N28 · Random Forest · R²=0.70</p>
     </div>
   </div>
@@ -1103,7 +1105,7 @@ function openReportModal(){
               <div>📦 CircuitNet-N28</div>
             </div>
           </div>
-          <span class="rh-badge">VLSI Power Predictor v1.0 &nbsp;·&nbsp; Single Design Analysis</span>
+          <span class="rh-badge">CircuitMind AI v1.0 &nbsp;·&nbsp; Single Design Analysis</span>
         </div>
 
         <div class="report-body">
@@ -1173,11 +1175,11 @@ function openReportModal(){
 
         <div class="report-footer">
           <div class="rf-note">
-            This report was generated automatically by VLSI Power Predictor using a Random Forest model trained on CircuitNet-N28 dataset (R²=0.70). 
+            This report was generated automatically by CircuitMind AI using a Random Forest model trained on CircuitNet-N28 dataset (R²=0.70). 
             Predictions are estimates for early-stage design guidance — verify with full power analysis before sign-off.
           </div>
           <div>
-            <div class="rf-logo">⚡ VLSI Power Predictor</div>
+            <div class="rf-logo">CircuitMind AI</div>
             <div style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;margin-top:3px">${tsShort}</div>
           </div>
         </div>
@@ -1235,7 +1237,7 @@ function openReportModal(){
               <div>📦 CircuitNet-N28</div>
             </div>
           </div>
-          <span class="rh-badge">VLSI Power Predictor v1.0 &nbsp;·&nbsp; Batch Design Analysis</span>
+          <span class="rh-badge">CircuitMind AI v1.0 &nbsp;·&nbsp; Batch Design Analysis</span>
         </div>
 
         <div class="report-body">
@@ -1289,11 +1291,11 @@ function openReportModal(){
 
         <div class="report-footer">
           <div class="rf-note">
-            This report was generated automatically by VLSI Power Predictor using a Random Forest model trained on CircuitNet-N28 dataset (R²=0.70).
+            This report was generated automatically by CircuitMind AI using a Random Forest model trained on CircuitNet-N28 dataset (R²=0.70).
             Predictions are estimates for early-stage design guidance — verify with full power analysis before sign-off.
           </div>
           <div>
-            <div class="rf-logo"> VLSI Power Predictor</div>
+            <div class="rf-logo">CircuitMind AI</div>
             <div style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;margin-top:3px">${tsShort}</div>
           </div>
         </div>
