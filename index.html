@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VLSI Power Predictor</title>
+<link rel="icon" type="image/png" href="Logo.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -28,6 +29,113 @@
   --shadow:    0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
   --shadow-lg: 0 12px 40px rgba(0,0,0,0.10);
 }
+
+/* ── DARK MODE OVERRIDES ── */
+html.dark {
+  --bg:        #0f1117;
+  --surface:   #1a1d27;
+  --border:    #2a2f3f;
+  --border2:   #353a4d;
+  --slate:     #94a3b8;
+  --text:      #e2e8f0;
+  --sub:       #94a3b8;
+  --muted:     #64748b;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow:    0 4px 16px rgba(0,0,0,0.35), 0 1px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
+}
+html.dark body::before { opacity:.12 }
+html.dark header { background:#1a1d27 }
+html.dark .card { background:#1a1d27 }
+html.dark input[type="number"],
+html.dark select { background:#0f1117; color:var(--text); border-color:var(--border2) }
+html.dark input[type="number"]:focus,
+html.dark select:focus { background:#0f1117 }
+html.dark select option { background:#1a1d27; color:var(--text) }
+html.dark .badge { background:#0f1117 }
+html.dark .drop-zone { background:#0f1117 }
+html.dark .drop-zone:hover, html.dark .drop-zone.dragging { background:rgba(79,70,229,.08) }
+html.dark .empty-state { background:#1a1d27 }
+html.dark .power-card.low-card { background:linear-gradient(135deg,#022c22,#064e3b);border-color:#065f46 }
+html.dark .power-card.moderate-card { background:linear-gradient(135deg,#1c1400,#292100);border-color:#78350f }
+html.dark .power-card.high-card { background:linear-gradient(135deg,#1f0010,#2d0018);border-color:#9f1239 }
+html.dark .param-chip { background:#0f1117 }
+html.dark .rec-item { background:#0f1117 }
+html.dark .module-row { border-bottom-color:var(--border) }
+html.dark .mod-tag.high { background:#3f0d1a;color:#fb7185 }
+html.dark .mod-tag.moderate { background:#2d1800;color:#fbbf24 }
+html.dark .mod-tag.low { background:#052e16;color:#4ade80 }
+html.dark .count-card.low { background:#022c22;border-color:#065f46 }
+html.dark .count-card.moderate { background:#292100;border-color:#78350f }
+html.dark .count-card.high { background:#2d0018;border-color:#9f1239 }
+html.dark .results-table th { background:rgba(79,70,229,.15) }
+html.dark .results-table td { border-bottom-color:var(--border) }
+html.dark .results-table tr:hover td { background:rgba(79,70,229,.06) }
+html.dark .csv-preview table thead th { background:rgba(79,70,229,.15) }
+html.dark .csv-preview table td { border-bottom-color:var(--border); color:var(--text) }
+html.dark .col-table th { background:rgba(79,70,229,.15) }
+html.dark .col-table td { border-bottom-color:var(--border) }
+html.dark .csv-error-panel { border-color:#7f1d1d }
+html.dark .csv-error-header { background:linear-gradient(135deg,#2d0018,#1c1400);border-bottom-color:#7f1d1d }
+html.dark .csv-error-title { color:#fca5a5 }
+html.dark .csv-error-subtitle { color:#fcd34d }
+html.dark .csv-guide { background:#1a1d27 }
+html.dark .guide-step { border-bottom-color:var(--border) }
+html.dark .row-errors { background:#1a0a0a;border-top-color:#7f1d1d }
+html.dark .row-err-item { border-bottom-color:#3f1515 }
+html.dark .manual-redirect-banner { background:linear-gradient(135deg,#1e1b4b,#2d1f47,#0d1f1e) }
+html.dark .report-modal { background:#1a1d27 }
+html.dark .report-body { background:#1a1d27 }
+html.dark .report-power-hero { background:linear-gradient(135deg,#1e1b4b,#1f1b33,#0d1f1e);border-color:#3730a3 }
+html.dark .rp-chip { background:#0f1117;border-color:var(--border2) }
+html.dark .rp-chip-key { color:var(--muted) }
+html.dark .rp-chip-val { color:var(--text) }
+html.dark .report-chart-box { background:#0f1117;border-color:var(--border2) }
+html.dark .report-module-row { border-bottom-color:var(--border) }
+html.dark .rmr-bar { background:#1e2130 }
+html.dark .rmr-tag.high { background:#3f0d1a;color:#fb7185 }
+html.dark .rmr-tag.moderate { background:#2d1800;color:#fbbf24 }
+html.dark .rmr-tag.low { background:#052e16;color:#4ade80 }
+html.dark .report-rec-item { background:#0f1117 }
+html.dark .report-footer { background:linear-gradient(135deg,#0f1117,#1a1020);border-top-color:var(--border) }
+html.dark .modal-actions { background:#1a1d27;border-top-color:var(--border) }
+html.dark .modal-close-btn { background:var(--bg);border-color:var(--border2);color:var(--text) }
+html.dark .modal-close-btn:hover { background:#0f1117 }
+html.dark .report-table th { background:rgba(79,70,229,.15) }
+html.dark .report-table td { border-bottom-color:var(--border) }
+html.dark .rcs-card.low { background:#022c22;border-color:#065f46 }
+html.dark .rcs-card.moderate { background:#292100;border-color:#78350f }
+html.dark .rcs-card.high { background:#2d0018;border-color:#9f1239 }
+html.dark .tabs { background:#1a1d27 }
+html.dark .tab-btn:not(.active):hover { background:rgba(79,70,229,.1) }
+html.dark input[type="range"] { background:var(--border) }
+html.dark .power-bar-track { background:rgba(255,255,255,.08) }
+
+/* ── DARK MODE TOGGLE BUTTON ── */
+.dark-toggle {
+  display:flex;align-items:center;gap:7px;padding:7px 14px;
+  background:var(--bg);border:1.5px solid var(--border2);border-radius:20px;
+  cursor:pointer;transition:all .2s;font-family:'JetBrains Mono',monospace;
+  font-size:11px;font-weight:500;color:var(--sub);
+  white-space:nowrap;flex-shrink:0;
+}
+.dark-toggle:hover { border-color:var(--indigo);color:var(--indigo);background:rgba(79,70,229,.05) }
+.dark-toggle .toggle-track {
+  width:32px;height:18px;border-radius:99px;background:var(--border2);
+  position:relative;transition:background .2s;flex-shrink:0;
+}
+.dark-toggle .toggle-thumb {
+  position:absolute;top:3px;left:3px;width:12px;height:12px;
+  border-radius:50%;background:#fff;transition:transform .2s,background .2s;
+  box-shadow:0 1px 3px rgba(0,0,0,.2);
+}
+html.dark .dark-toggle .toggle-track { background:var(--indigo) }
+html.dark .dark-toggle .toggle-thumb { transform:translateX(14px) }
+html.dark .dark-toggle { border-color:var(--indigo);color:var(--indigo) }
+.toggle-icon-sun,.toggle-icon-moon { font-size:13px;line-height:1 }
+html.dark .toggle-icon-sun { display:none }
+html:not(.dark) .toggle-icon-moon { display:none }
+
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;font-size:15px;background:var(--bg);color:var(--text);min-height:100vh}
 body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,#c7d0e8 1px,transparent 1px);background-size:28px 28px;pointer-events:none;z-index:0;opacity:.4}
@@ -404,7 +512,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;hei
 
 <header>
   <div class="logo">
-    <div class="logo-icon">⚡</div>
+    <img src="Logo.png" alt="Logo" style="width:38px;height:38px;border-radius:10px;object-fit:contain;">
     <div class="logo-text">
       <h1>VLSI Power Predictor</h1>
       <p>CircuitNet-N28 · Random Forest · R²=0.70</p>
@@ -413,6 +521,14 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;hei
   <div class="header-right">
     <div class="badge"><span class="dot green"></span> Model Active</div>
     <div class="badge"><span class="dot amber"></span> RISC-V Designs</div>
+
+    <!-- DARK MODE TOGGLE -->
+    <button class="dark-toggle" id="dark-toggle-btn" onclick="toggleDark()" title="Toggle dark mode">
+      <span class="toggle-icon-sun">☀</span>
+      <span class="toggle-icon-moon">☽</span>
+      <div class="toggle-track"><div class="toggle-thumb"></div></div>
+    </button>
+
     <button class="dl-report-btn" id="dl-report-btn" onclick="openReportModal()">
       <span class="btn-icon">⬇</span> Download Report
     </button>
@@ -547,6 +663,22 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;hei
 </div>
 
 <script>
+// ════════════════════════════════════════════════════════
+// DARK MODE TOGGLE
+// ════════════════════════════════════════════════════════
+function toggleDark(){
+  const isDark=document.documentElement.classList.toggle('dark');
+  try{localStorage.setItem('vlsi-theme',isDark?'dark':'light')}catch(e){}
+}
+(function(){
+  try{
+    const saved=localStorage.getItem('vlsi-theme');
+    if(saved==='dark'||(!saved&&window.matchMedia('(prefers-color-scheme: dark)').matches)){
+      document.documentElement.classList.add('dark');
+    }
+  }catch(e){}
+})();
+
 // ════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════
@@ -955,7 +1087,7 @@ function openReportModal(){
       <div class="report-doc">
         <div class="report-header-band">
           <div class="rh-logo" style="position:relative;z-index:1">
-            <div class="rh-logo-icon">⚡</div>
+            <img src="Logo.png" alt="Logo" style="width:40px;height:40px;border-radius:10px;object-fit:contain;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);">
             VLSI Power Dissipation Report
           </div>
           <div class="rh-meta-row">
@@ -1161,7 +1293,7 @@ function openReportModal(){
             Predictions are estimates for early-stage design guidance — verify with full power analysis before sign-off.
           </div>
           <div>
-            <div class="rf-logo">⚡ VLSI Power Predictor</div>
+            <div class="rf-logo"> VLSI Power Predictor</div>
             <div style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;margin-top:3px">${tsShort}</div>
           </div>
         </div>
