@@ -138,7 +138,7 @@ Higher frequency ⇒ higher power consumption
 
 * CircuitNet Dataset: [https://github.com/circuitnet/CircuitNet](https://github.com/circuitnet/CircuitNet)
 
----
+
 
 ## Website link:
 https://chippowerpredicter.netlify.app/
